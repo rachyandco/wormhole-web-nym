@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wormhole-Nym Web</title>
+  <script type="module" crossorigin src="/wormhole-web-nym/assets/index-DGuoD08D.js"></script>
+  <link rel="stylesheet" crossorigin href="/wormhole-web-nym/assets/index-x_fL3e42.css">
+</head>
+<body>
+
+<header>
+  <h1>Wormhole-Nym Web</h1>
+  <p>End-to-end encrypted P2P file transfer over the Nym mixnet — no servers</p>
+</header>
+
+<main>
+
+  <!-- Tab bar -->
+  <div class="tabs">
+    <button id="tab-receive" class="tab active">Receive a file</button>
+    <button id="tab-send"    class="tab">Send a file</button>
+  </div>
+
+  <!-- ═══════════════════════════════ RECEIVE PANEL ══════════════════════════ -->
+  <div id="panel-receive" class="panel">
+
+    <!-- Step 1: enter code -->
+    <div id="step-r-code" class="step card">
+      <h2>Enter the wormhole code</h2>
+      <p class="status">The sender will share a code like <code>word-word-word:NymAddress</code></p>
+      <input type="text" id="code-input"
+             placeholder="calm-fork-road:8yGFbT5ksq…" autocomplete="off" spellcheck="false" />
+      <button id="btn-connect" class="btn-primary">Connect</button>
+      <span id="status-r-code" class="status"></span>
+    </div>
+
+    <!-- Step 2: connecting / key exchange -->
+    <div id="step-r-connecting" class="step card hidden">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div class="spinner"></div>
+        <span id="status-r-connect" class="status">Initializing…</span>
+      </div>
+    </div>
+
+    <!-- Step 3: offer received -->
+    <div id="step-r-offer" class="step card hidden">
+      <h2>Incoming file</h2>
+      <p id="offer-filename" class="status"></p>
+      <p id="offer-filesize" class="status"></p>
+      <div class="btn-row">
+        <button id="btn-accept" class="btn-success">Accept &amp; download</button>
+        <button id="btn-reject" class="btn-danger">Reject</button>
+      </div>
+    </div>
+
+    <!-- Step 4: receiving chunks -->
+    <div id="step-r-progress" class="step card hidden">
+      <h2>Receiving…</h2>
+      <div class="progress-track"><div id="progress-r-fill" class="progress-fill"></div></div>
+      <span id="status-r-progress" class="status">0 B / 0 B</span>
+    </div>
+
+    <!-- Step 5: done -->
+    <div id="step-r-done" class="step card hidden">
+      <div class="done-icon">✓</div>
+      <h2 style="text-align:center">Transfer complete</h2>
+      <p class="status" style="text-align:center">Your file was downloaded to your browser's downloads folder.</p>
+      <button id="btn-receive-again" class="btn-ghost">Receive another file</button>
+    </div>
+
+  </div><!-- /panel-receive -->
+
+
+  <!-- ═══════════════════════════════ SEND PANEL ════════════════════════════ -->
+  <div id="panel-send" class="panel hidden">
+
+    <!-- Step 1: select file -->
+    <div id="step-s-file" class="step card">
+      <h2>Select a file to send</h2>
+      <input type="file" id="file-input" />
+      <button id="btn-send-start" class="btn-primary" disabled>Start transfer</button>
+      <span id="status-s-file" class="status"></span>
+    </div>
+
+    <!-- Step 2: connecting -->
+    <div id="step-s-connecting" class="step card hidden">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div class="spinner"></div>
+        <span id="status-s-connect" class="status">Initializing…</span>
+      </div>
+    </div>
+
+    <!-- Step 3: waiting for receiver (code displayed here) -->
+    <div id="step-s-waiting" class="step card hidden">
+      <h2>Your wormhole code</h2>
+      <div id="wormhole-code" class="code-box"></div>
+      <div class="btn-row">
+        <button id="btn-copy-code" class="btn-ghost">Copy</button>
+      </div>
+      <p class="status">Share this code with the receiver. Keep this page open until the transfer is complete.</p>
+    </div>
+
+    <!-- Step 4: sending chunks (shown alongside waiting) -->
+    <div id="step-s-progress" class="step card hidden">
+      <div class="progress-track"><div id="progress-s-fill" class="progress-fill"></div></div>
+      <span id="status-s-progress" class="status">Waiting for receiver…</span>
+    </div>
+
+    <!-- Step 5: done -->
+    <div id="step-s-done" class="step card hidden">
+      <div class="done-icon">✓</div>
+      <h2 style="text-align:center">Transfer complete</h2>
+      <p class="status" style="text-align:center">The receiver confirmed receipt and integrity of the file.</p>
+      <button id="btn-send-again" class="btn-ghost">Send another file</button>
+    </div>
+
+  </div><!-- /panel-send -->
+
+</main>
+
+<footer>
+  <a href="https://github.com/rachyandco/wormhole-web-nym" target="_blank" rel="noopener">GitHub</a>
+  &mdash;
+  Released under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a>
+</footer>
+
+</body>
+</html>
