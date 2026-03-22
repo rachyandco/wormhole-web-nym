@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // On GitHub Pages the site lives at /wormhole-web-nym/.
+  // Locally (npm run dev / npm run preview) it stays at /.
+  base: process.env.VITE_BASE_URL ?? '/',
+
   optimizeDeps: {
     // sdk-full-fat inlines WASM as base64; pre-bundling breaks it
     exclude: ['@nymproject/sdk-full-fat'],
