@@ -184,7 +184,13 @@ export async function receiveFile(code, nymClient, callbacks) {
       onPacketReceived?.();
       const bytes = e.args.payload;
       if (!keysReady) {
-        rawQ.push(bytes);
+        // Only accept PakeReply in the pre-key phase.
+        // This prevents cross-talk when sender and receiver share the same client:
+        // the Hello we sent bounces back to us too, but we must not consume it.
+        try {
+          const msg = decodeMsg(bytes);
+          if (msg.type === 'PakeReply') rawQ.push(bytes);
+        } catch { /* ignore malformed */ }
       } else {
         // Route to PayloadBuffer
         try {
@@ -368,7 +374,12 @@ export async function sendFile(file, nymClient, callbacks) {
       onPacketReceived?.();
       const bytes = e.args.payload;
       if (!keysReady) {
-        rawQ.push(bytes);
+        // Only accept Hello in the pre-key phase.
+        // Prevents cross-talk when sender and receiver share the same client.
+        try {
+          const msg = decodeMsg(bytes);
+          if (msg.type === 'Hello') rawQ.push(bytes);
+        } catch { /* ignore malformed */ }
       } else {
         try {
           const msg = decodeMsg(bytes);
