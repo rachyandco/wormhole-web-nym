@@ -318,6 +318,47 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   box-shadow: 0 0 6px 1px var(--accent2);
   animation: pkt-in 1.8s cubic-bezier(.4,0,.6,1) forwards;
 }
+/* Cover / dummy traffic — muted colour, slower, lower peak opacity */
+.pkt.out.cover {
+  background: var(--muted);
+  box-shadow: 0 0 4px 1px var(--muted);
+  animation: pkt-out-cover 2.4s cubic-bezier(.4,0,.6,1) forwards;
+}
+.pkt.in.cover {
+  background: var(--muted);
+  box-shadow: 0 0 4px 1px var(--muted);
+  animation: pkt-in-cover 2.4s cubic-bezier(.4,0,.6,1) forwards;
+}
+@keyframes pkt-out-cover {
+  0%   { left: 0%;    opacity: 0; }
+  4%   { opacity: 0.45; }
+  20%  { left: 22%;   transform: translateY(-50%) scale(1);   }
+  26%  { left: 25%;   transform: translateY(-50%) scale(1.5); }
+  32%  { left: 28%;   transform: translateY(-50%) scale(1);   }
+  45%  { left: 47%;   transform: translateY(-50%) scale(1);   }
+  51%  { left: 50%;   transform: translateY(-50%) scale(1.5); }
+  57%  { left: 53%;   transform: translateY(-50%) scale(1);   }
+  68%  { left: 72%;   transform: translateY(-50%) scale(1);   }
+  74%  { left: 75%;   transform: translateY(-50%) scale(1.5); }
+  80%  { left: 78%;   transform: translateY(-50%) scale(1);   }
+  96%  { left: 100%;  opacity: 0.45; }
+  100% { left: 100%;  opacity: 0; }
+}
+@keyframes pkt-in-cover {
+  0%   { left: 100%;  opacity: 0; }
+  4%   { opacity: 0.45; }
+  20%  { left: 78%;   transform: translateY(-50%) scale(1);   }
+  26%  { left: 75%;   transform: translateY(-50%) scale(1.5); }
+  32%  { left: 72%;   transform: translateY(-50%) scale(1);   }
+  45%  { left: 53%;   transform: translateY(-50%) scale(1);   }
+  51%  { left: 50%;   transform: translateY(-50%) scale(1.5); }
+  57%  { left: 47%;   transform: translateY(-50%) scale(1);   }
+  68%  { left: 28%;   transform: translateY(-50%) scale(1);   }
+  74%  { left: 25%;   transform: translateY(-50%) scale(1.5); }
+  80%  { left: 22%;   transform: translateY(-50%) scale(1);   }
+  96%  { left: 0%;    opacity: 0.45; }
+  100% { left: 0%;    opacity: 0; }
+}
 /* Packets pass through 3 mix nodes at ~25 %, 50 %, 75 % and briefly scale up */
 @keyframes pkt-out {
   0%   { left: 0%;    opacity: 0; }
@@ -356,9 +397,10 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   gap: 20px;
   font-size: 0.78rem;
 }
-.pkt-count { font-variant-numeric: tabular-nums; }
-.pkt-out   { color: var(--accent);  }
-.pkt-in    { color: var(--accent2); }
+.pkt-count        { font-variant-numeric: tabular-nums; }
+.pkt-out          { color: var(--accent);  }
+.pkt-in           { color: var(--accent2); }
+.pkt-cover-label  { color: var(--muted);   }
 
 /* Footer */
 footer {

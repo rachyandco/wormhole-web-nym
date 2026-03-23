@@ -43,10 +43,13 @@ function formatBytes(bytes) {
 // ── Mixnet visualization ───────────────────────────────────────────────────────
 
 let pktSent = 0, pktRecv = 0;
-// Throttle: max one dot animation per 250 ms per direction
+// Throttle: max one dot animation per 250 ms per direction (not applied to cover)
 const animThrottle = { out: 0, in: 0 };
 
 function mixnetShow() { show('mixnet-card'); }
+
+let coverInterval = null;
+let _coverFlip = false;
 
 function mixnetSetState(state, gatewayAddr) {
   const card = $('mixnet-card');
@@ -56,26 +59,36 @@ function mixnetSetState(state, gatewayAddr) {
   dot.className = `conn-dot ${state}`;
   if (state === 'connecting') {
     text.textContent = 'Connecting to Nym mixnet…';
+    clearInterval(coverInterval); coverInterval = null;
   } else if (state === 'connected') {
     text.textContent = 'Connected to Nym mixnet';
     card.classList.add('connected');
     if (gatewayAddr) {
       $('conn-gateway').textContent = `via ${gatewayAddr.slice(0, 20)}…`;
     }
+    if (!coverInterval) {
+      coverInterval = setInterval(() => {
+        _coverFlip = !_coverFlip;
+        mixnetAnimPkt(_coverFlip ? 'out' : 'in', true);
+      }, 1400);
+    }
   } else if (state === 'error') {
     text.textContent = 'Nym connection error';
+    clearInterval(coverInterval); coverInterval = null;
   }
 }
 
-function mixnetAnimPkt(dir /* 'out' | 'in' */) {
-  const now = Date.now();
-  if (now - animThrottle[dir] < 250) return;
-  animThrottle[dir] = now;
+function mixnetAnimPkt(dir /* 'out' | 'in' */, cover = false) {
+  if (!cover) {
+    const now = Date.now();
+    if (now - animThrottle[dir] < 250) return;
+    animThrottle[dir] = now;
+  }
 
   const lane = $('pkt-lane');
   if (!lane) return;
   const dot = document.createElement('div');
-  dot.className = `pkt ${dir}`;
+  dot.className = cover ? `pkt ${dir} cover` : `pkt ${dir}`;
   lane.appendChild(dot);
   dot.addEventListener('animationend', () => dot.remove(), { once: true });
 }
