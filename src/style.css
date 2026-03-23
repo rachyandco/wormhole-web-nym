@@ -13,6 +13,30 @@
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
+:root[data-theme="light"] {
+  --bg:      #f4f5f9;
+  --surface: #ffffff;
+  --border:  #d0d4e4;
+  --accent:  #6254d6;
+  --accent2: #1fa87a;
+  --text:    #1a1d27;
+  --muted:   #6b7080;
+  --danger:  #d94f4f;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg:      #f4f5f9;
+    --surface: #ffffff;
+    --border:  #d0d4e4;
+    --accent:  #6254d6;
+    --accent2: #1fa87a;
+    --text:    #1a1d27;
+    --muted:   #6b7080;
+    --danger:  #d94f4f;
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -28,9 +52,32 @@ header {
   text-align: center;
   border-bottom: 1px solid var(--border);
   margin-bottom: 32px;
+  position: relative;
 }
 header h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.5px; }
 header p  { color: var(--muted); margin-top: 4px; font-size: 0.9rem; }
+
+/* Theme toggle button */
+#theme-toggle {
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  transform: translateY(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+#theme-toggle:hover { color: var(--text); border-color: var(--accent); }
 
 main {
   width: 100%;

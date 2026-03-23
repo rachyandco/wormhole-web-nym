@@ -167,6 +167,32 @@ async function initNym(onStatusUpdate) {
   return nymInitPromise;
 }
 
+// ── Dark / light theme toggle ──────────────────────────────────────────────────
+
+(function () {
+  const root   = document.documentElement;
+  const btn    = $('theme-toggle');
+  const DARK   = '🌙';
+  const LIGHT  = '☀️';
+  const stored = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  // Resolve effective theme: stored preference wins, then browser default
+  const effective = stored ?? (prefersDark ? 'dark' : 'light');
+
+  function applyTheme(theme) {
+    root.setAttribute('data-theme', theme);
+    btn.textContent = theme === 'dark' ? LIGHT : DARK;
+  }
+
+  applyTheme(effective);
+
+  btn.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('theme', next);
+    applyTheme(next);
+  });
+})();
+
 // ── Tab switching ──────────────────────────────────────────────────────────────
 
 $('tab-receive').addEventListener('click', () => {
