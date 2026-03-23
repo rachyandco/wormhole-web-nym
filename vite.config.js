@@ -6,8 +6,8 @@ export default defineConfig({
   base: process.env.VITE_BASE_URL ?? '/',
 
   optimizeDeps: {
-    // These packages inline or fetch WASM; pre-bundling breaks them.
-    exclude: ['@nymproject/sdk-full-fat', 'wormhole-nym-wasm'],
+    // sdk-full-fat inlines WASM as base64; pre-bundling breaks it.
+    exclude: ['@nymproject/sdk-full-fat'],
   },
   build: {
     target: 'esnext',

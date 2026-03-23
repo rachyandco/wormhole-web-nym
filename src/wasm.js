@@ -14,7 +14,7 @@ import initWasm, {
   wasm_encrypt,
   wasm_decrypt,
   wasm_sha256,
-} from 'wormhole-nym-wasm';
+} from './wasm-pkg/wormhole_nym_wasm.js';
 
 // One-time async init — all importing modules wait for this before running.
 await initWasm();
