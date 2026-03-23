@@ -1,52 +1,37 @@
 /**
  * Wormhole-Nym Web — UI entry point.
- *
- * Handles:
- *  - Nym client lifecycle (lazy init, shared between Send and Receive)
- *  - Tab switching
- *  - Receive flow: code input → SPAKE2 → offer → accept/reject → download
- *  - Send flow:    file select → SPAKE2 → code display → send chunks → ack
  */
 
 import { createNymMixnetClient } from '@nymproject/sdk-full-fat';
 import { receiveFile, sendFile } from './wormhole.js';
 
-// ── Nym config ────────────────────────────────────────────────────────────────
 const NYM_API_URL = 'https://validator.nymtech.net/api';
-// These WSS gateways are known to accept browser connections.
-// The SDK will auto-select a gateway; forceTls ensures WSS.
 const NYM_FORCE_TLS = true;
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let nymClient   = null;   // shared once initialized
-let nymAddress  = null;
-let nymReady    = false;
+// ── State ──────────────────────────────────────────────────────────────────────
+let nymClient      = null;
+let nymAddress     = null;
+let nymReady       = false;
 let nymInitPromise = null;
 
-// ── DOM helpers ───────────────────────────────────────────────────────────────
+// ── DOM helpers ────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+const show = id => $(id)?.classList.remove('hidden');
+const hide = id => $(id)?.classList.add('hidden');
 
-function show(id)  { $(id)?.classList.remove('hidden'); }
-function hide(id)  { $(id)?.classList.add('hidden'); }
 function showOnly(ids, parent) {
   parent.querySelectorAll('.step').forEach(el => el.classList.add('hidden'));
-  ids.forEach(id => show(id));
+  ids.forEach(show);
 }
-
 function setStatus(id, text, cls = '') {
-  const el = $(id);
-  if (!el) return;
-  el.textContent = text;
-  el.className = 'status ' + cls;
+  const el = $(id); if (!el) return;
+  el.textContent = text; el.className = 'status ' + cls;
 }
-
 function setProgress(id, received, total) {
-  const fill = $(id);
-  if (!fill) return;
+  const fill = $(id); if (!fill) return;
   const pct = total > 0n ? Number((received * 100n) / total) : 0;
   fill.style.width = Math.min(pct, 100) + '%';
 }
-
 function formatBytes(bytes) {
   const n = typeof bytes === 'bigint' ? Number(bytes) : bytes;
   if (n < 1024)       return `${n} B`;
@@ -55,59 +40,134 @@ function formatBytes(bytes) {
   return `${(n/1073741824).toFixed(2)} GiB`;
 }
 
-// ── Nym client init ───────────────────────────────────────────────────────────
+// ── Mixnet visualization ───────────────────────────────────────────────────────
+
+let pktSent = 0, pktRecv = 0;
+// Throttle: max one dot animation per 250 ms per direction
+const animThrottle = { out: 0, in: 0 };
+
+function mixnetShow() { show('mixnet-card'); }
+
+function mixnetSetState(state, gatewayAddr) {
+  const card = $('mixnet-card');
+  const dot  = $('conn-dot');
+  const text = $('conn-text');
+  card.classList.remove('connected');
+  dot.className = `conn-dot ${state}`;
+  if (state === 'connecting') {
+    text.textContent = 'Connecting to Nym mixnet…';
+  } else if (state === 'connected') {
+    text.textContent = 'Connected to Nym mixnet';
+    card.classList.add('connected');
+    if (gatewayAddr) {
+      $('conn-gateway').textContent = `via ${gatewayAddr.slice(0, 20)}…`;
+    }
+  } else if (state === 'error') {
+    text.textContent = 'Nym connection error';
+  }
+}
+
+function mixnetAnimPkt(dir /* 'out' | 'in' */) {
+  const now = Date.now();
+  if (now - animThrottle[dir] < 250) return;
+  animThrottle[dir] = now;
+
+  const lane = $('pkt-lane');
+  if (!lane) return;
+  const dot = document.createElement('div');
+  dot.className = `pkt ${dir}`;
+  lane.appendChild(dot);
+  dot.addEventListener('animationend', () => dot.remove(), { once: true });
+}
+
+function mixnetUpdateCounters() {
+  $('pkt-sent').textContent = `↑ ${pktSent} sent`;
+  $('pkt-recv').textContent = `↓ ${pktRecv} received`;
+}
+
+// ── Mixnet packet callbacks ────────────────────────────────────────────────────
+
+function onPacketSent() {
+  pktSent++;
+  mixnetAnimPkt('out');
+  mixnetUpdateCounters();
+}
+
+function onPacketReceived() {
+  pktRecv++;
+  mixnetAnimPkt('in');
+  mixnetUpdateCounters();
+}
+
+// ── Nym client init ────────────────────────────────────────────────────────────
 
 async function initNym(onStatusUpdate) {
   if (nymReady) return;
   if (nymInitPromise) return nymInitPromise;
+
+  mixnetShow();
+  mixnetSetState('connecting');
 
   nymInitPromise = (async () => {
     onStatusUpdate('Creating Nym WebAssembly client…');
     nymClient = await createNymMixnetClient();
 
     await new Promise((resolve, reject) => {
+      let done = false;
+
       nymClient.events.subscribeToConnected(e => {
+        if (done) return;
+        done = true;
+        clearTimeout(timeoutId);
         nymAddress = e.args.address;
         nymReady   = true;
+        mixnetSetState('connected', nymAddress);
         resolve();
       });
 
       const clientId = `wormhole-web-${crypto.randomUUID().slice(0, 8)}`;
-      onStatusUpdate('Connecting to Nym mixnet (this takes ~30 seconds)…');
+      onStatusUpdate('Connecting to Nym mixnet (this may take ~30 s)…');
 
       nymClient.client.start({
         clientId,
         nymApiUrl: NYM_API_URL,
         forceTls:  NYM_FORCE_TLS,
-      }).catch(reject);
+      }).catch(err => {
+        if (done) return;
+        done = true;
+        clearTimeout(timeoutId);
+        mixnetSetState('error');
+        reject(err);
+      });
 
-      // Safety timeout
-      setTimeout(() => reject(new Error('Nym connection timeout after 90 s')), 90_000);
+      const timeoutId = setTimeout(() => {
+        if (done) return;
+        done = true;
+        mixnetSetState('error');
+        reject(new Error('Nym connection timeout after 90 s'));
+      }, 90_000);
     });
 
-    onStatusUpdate(`Connected. Address: ${nymAddress.slice(0, 24)}…`);
+    onStatusUpdate('Connected to Nym mixnet.');
   })();
 
   return nymInitPromise;
 }
 
-// ── Tab switching ─────────────────────────────────────────────────────────────
+// ── Tab switching ──────────────────────────────────────────────────────────────
 
 $('tab-receive').addEventListener('click', () => {
   $('tab-receive').classList.add('active');
   $('tab-send').classList.remove('active');
-  show('panel-receive');
-  hide('panel-send');
+  show('panel-receive'); hide('panel-send');
 });
-
 $('tab-send').addEventListener('click', () => {
   $('tab-send').classList.add('active');
   $('tab-receive').classList.remove('active');
-  show('panel-send');
-  hide('panel-receive');
+  show('panel-send'); hide('panel-receive');
 });
 
-// ── RECEIVE flow ──────────────────────────────────────────────────────────────
+// ── RECEIVE flow ───────────────────────────────────────────────────────────────
 
 const receivePanel = $('panel-receive');
 
@@ -129,20 +189,16 @@ $('btn-connect').addEventListener('click', async () => {
   }
 
   try {
-    let offerResolve;
-    const offerPromise = new Promise(r => { offerResolve = r; });
-
     await receiveFile(code, nymClient, {
       onStatus: text => setStatus('status-r-connect', text),
+      onPacketSent,
+      onPacketReceived,
 
       onOffer: async offer => {
-        // Show offer UI and wait for user decision
         $('offer-filename').textContent = `File: ${offer.filename}`;
         $('offer-filesize').textContent = `Size: ${formatBytes(offer.filesize)}`;
         showOnly(['step-r-offer'], receivePanel);
-
         return new Promise(resolve => {
-          offerResolve = resolve;
           $('btn-accept').onclick = () => {
             showOnly(['step-r-progress'], receivePanel);
             setStatus('status-r-progress', 'Starting download…');
@@ -159,17 +215,13 @@ $('btn-connect').addEventListener('click', async () => {
 
       onProgress: (received, total) => {
         setProgress('progress-r-fill', received, total);
-        setStatus('status-r-progress',
-          `${formatBytes(received)} / ${formatBytes(total)}`);
+        setStatus('status-r-progress', `${formatBytes(received)} / ${formatBytes(total)}`);
       },
 
       onComplete: (filename, blob) => {
-        // Trigger browser download
         const url = URL.createObjectURL(blob);
-        const a   = document.createElement('a');
-        a.href     = url;
-        a.download = filename;
-        a.click();
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
         showOnly(['step-r-done'], receivePanel);
       },
@@ -181,7 +233,6 @@ $('btn-connect').addEventListener('click', async () => {
   }
 });
 
-// Reset receive on new transfer
 $('btn-receive-again').addEventListener('click', () => {
   $('code-input').value = '';
   $('btn-connect').disabled = false;
@@ -189,7 +240,7 @@ $('btn-receive-again').addEventListener('click', () => {
   setStatus('status-r-code', '');
 });
 
-// ── SEND flow ─────────────────────────────────────────────────────────────────
+// ── SEND flow ──────────────────────────────────────────────────────────────────
 
 const sendPanel = $('panel-send');
 let selectedFile = null;
@@ -216,23 +267,19 @@ $('btn-send-start').addEventListener('click', async () => {
 
   try {
     await sendFile(selectedFile, nymClient, {
+      onPacketSent,
+      onPacketReceived,
       onCode: code => {
         $('wormhole-code').textContent = code;
         showOnly(['step-s-waiting', 'step-s-progress'], sendPanel);
         setStatus('status-s-progress', 'Waiting for receiver…');
       },
-
       onStatus: text => setStatus('status-s-progress', text),
-
       onProgress: (sent, total) => {
         setProgress('progress-s-fill', sent, total);
-        setStatus('status-s-progress',
-          `${formatBytes(sent)} / ${formatBytes(total)}`);
+        setStatus('status-s-progress', `${formatBytes(sent)} / ${formatBytes(total)}`);
       },
-
-      onComplete: () => {
-        showOnly(['step-s-done'], sendPanel);
-      },
+      onComplete: () => showOnly(['step-s-done'], sendPanel),
     });
   } catch (err) {
     showOnly(['step-s-file'], sendPanel);
@@ -242,8 +289,7 @@ $('btn-send-start').addEventListener('click', async () => {
 });
 
 $('btn-copy-code').addEventListener('click', () => {
-  const code = $('wormhole-code').textContent;
-  navigator.clipboard.writeText(code).then(() => {
+  navigator.clipboard.writeText($('wormhole-code').textContent).then(() => {
     $('btn-copy-code').textContent = 'Copied!';
     setTimeout(() => { $('btn-copy-code').textContent = 'Copy'; }, 2000);
   });

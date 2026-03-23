@@ -31,8 +31,9 @@ const CHUNK_SIZE = 32 * 1024; // 32 KiB — matches CLI
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function rawSend(nymClient, recipient, bytes) {
+async function rawSend(nymClient, recipient, bytes, onPacketSent) {
   await nymClient.client.rawSend({ payload: bytes, recipient });
+  onPacketSent?.();
 }
 
 /** Increment a BigInt counter and return the old value (post-increment semantics). */
@@ -155,7 +156,7 @@ class PayloadBuffer {
  *   onComplete(filename, blob) — transfer finished, browser download triggered by caller
  */
 export async function receiveFile(code, nymClient, callbacks) {
-  const { onStatus, onOffer, onProgress, onComplete } = callbacks;
+  const { onStatus, onOffer, onProgress, onComplete, onPacketSent, onPacketReceived } = callbacks;
   let unsub = null;
 
   try {
@@ -180,6 +181,7 @@ export async function receiveFile(code, nymClient, callbacks) {
     let sendKey   = null;
 
     unsub = nymClient.events.subscribeToRawMessageReceivedEvent(e => {
+      onPacketReceived?.();
       const bytes = e.args.payload;
       if (!keysReady) {
         rawQ.push(bytes);
@@ -197,7 +199,7 @@ export async function receiveFile(code, nymClient, callbacks) {
       type: 'Hello',
       receiver_address: ourAddr,
       pake_msg: spakeState.msg,
-    }));
+    }), onPacketSent);
 
     onStatus('Waiting for sender SPAKE2 reply…');
 
@@ -230,7 +232,7 @@ export async function receiveFile(code, nymClient, callbacks) {
     onStatus('Key exchange complete. Sending Ready…');
 
     // ── Send Ready ────────────────────────────────────────────────────────────
-    await rawSend(nymClient, senderAddr, encodeMsg({ type: 'Ready' }));
+    await rawSend(nymClient, senderAddr, encodeMsg({ type: 'Ready' }), onPacketSent);
 
     onStatus('Waiting for file offer…');
 
@@ -247,14 +249,14 @@ export async function receiveFile(code, nymClient, callbacks) {
 
     if (!accepted) {
       await rawSend(nymClient, senderAddr,
-        sealMsg(recvKey, ctrNext(recvCtr), { type: 'Reject', reason: 'User declined' }));
+        sealMsg(recvKey, ctrNext(recvCtr), { type: 'Reject', reason: 'User declined' }), onPacketSent);
       onStatus('Transfer rejected.');
       return;
     }
 
     // ── Send Accept ───────────────────────────────────────────────────────────
     await rawSend(nymClient, senderAddr,
-      sealMsg(recvKey, ctrNext(recvCtr), { type: 'Accept' }));
+      sealMsg(recvKey, ctrNext(recvCtr), { type: 'Accept' }), onPacketSent);
     onStatus('Receiving file…');
 
     // ── Receive chunks ────────────────────────────────────────────────────────
@@ -277,7 +279,7 @@ export async function receiveFile(code, nymClient, callbacks) {
           const missing = payBuf.nextExpected();
           onStatus(`Gap detected, requesting retransmit of slot ${missing}…`);
           await rawSend(nymClient, senderAddr,
-            sealMsg(recvKey, ctrNext(recvCtr), { type: 'Retransmit', counter: missing }));
+            sealMsg(recvKey, ctrNext(recvCtr), { type: 'Retransmit', counter: missing }), onPacketSent);
         }
         continue;
       }
@@ -313,7 +315,7 @@ export async function receiveFile(code, nymClient, callbacks) {
 
     // ── Send Ack ──────────────────────────────────────────────────────────────
     await rawSend(nymClient, senderAddr,
-      sealMsg(recvKey, ctrNext(recvCtr), { type: 'Ack', sha256: computedHash }));
+      sealMsg(recvKey, ctrNext(recvCtr), { type: 'Ack', sha256: computedHash }), onPacketSent);
 
     onStatus('Transfer complete!');
     onComplete(offer.filename, new Blob([fileData]));
@@ -335,7 +337,7 @@ export async function receiveFile(code, nymClient, callbacks) {
  *   onComplete()               — receiver confirmed receipt
  */
 export async function sendFile(file, nymClient, callbacks) {
-  const { onCode, onStatus, onProgress, onComplete } = callbacks;
+  const { onCode, onStatus, onProgress, onComplete, onPacketSent, onPacketReceived } = callbacks;
   let unsub = null;
 
   try {
@@ -363,6 +365,7 @@ export async function sendFile(file, nymClient, callbacks) {
     let recvKey   = null;
 
     unsub = nymClient.events.subscribeToRawMessageReceivedEvent(e => {
+      onPacketReceived?.();
       const bytes = e.args.payload;
       if (!keysReady) {
         rawQ.push(bytes);
@@ -385,7 +388,7 @@ export async function sendFile(file, nymClient, callbacks) {
 
     // ── Send PakeReply ────────────────────────────────────────────────────────
     await rawSend(nymClient, receiverAddr,
-      encodeMsg({ type: 'PakeReply', pake_msg: spakeState.msg }));
+      encodeMsg({ type: 'PakeReply', pake_msg: spakeState.msg }), onPacketSent);
 
     // ── Complete SPAKE2 ───────────────────────────────────────────────────────
     // peerMsg = Hello.pake_msg (side B's SPAKE2 message)
@@ -438,6 +441,7 @@ export async function sendFile(file, nymClient, callbacks) {
     // Re-sub with corrected router (non-Encrypted always go to rawQ)
     unsub();
     unsub = nymClient.events.subscribeToRawMessageReceivedEvent(e => {
+      onPacketReceived?.();
       const bytes = e.args.payload;
       try {
         const msg = decodeMsg(bytes);
@@ -481,7 +485,7 @@ export async function sendFile(file, nymClient, callbacks) {
         filename: file.name,
         filesize: BigInt(fileBytes.length),
         sha256:   fileHash,
-      }));
+      }), onPacketSent);
 
     // ── Wait for Accept or Reject ─────────────────────────────────────────────
     const decision = await payBuf.nextPayload(120_000);
@@ -505,14 +509,14 @@ export async function sendFile(file, nymClient, callbacks) {
     for (let i = 0; i < chunks.length; i++) {
       const data = chunks[i];
       await rawSend(nymClient, receiverAddr,
-        sealMsg(sendKey, ctrNext(sendCtr), { type: 'Chunk', seq: BigInt(i), data }));
+        sealMsg(sendKey, ctrNext(sendCtr), { type: 'Chunk', seq: BigInt(i), data }), onPacketSent);
       bytesSent += BigInt(data.length);
       onProgress(bytesSent, fileSize);
     }
 
     // ── Send Done ─────────────────────────────────────────────────────────────
     await rawSend(nymClient, receiverAddr,
-      sealMsg(sendKey, ctrNext(sendCtr), { type: 'Done', total_chunks: totalChunks }));
+      sealMsg(sendKey, ctrNext(sendCtr), { type: 'Done', total_chunks: totalChunks }), onPacketSent);
 
     onStatus('File sent. Waiting for delivery confirmation…');
 
@@ -546,7 +550,7 @@ export async function sendFile(file, nymClient, callbacks) {
         for (let i = chunkIdx; i < end; i++) {
           if (i < 0 || i >= chunks.length) continue;
           await rawSend(nymClient, receiverAddr,
-            sealMsg(sendKey, ctrNext(sendCtr), { type: 'Chunk', seq: BigInt(i), data: chunks[i] }));
+            sealMsg(sendKey, ctrNext(sendCtr), { type: 'Chunk', seq: BigInt(i), data: chunks[i] }), onPacketSent);
         }
       } else if (payload.type === 'Error') {
         throw new Error(`Receiver error: ${payload.message}`);
