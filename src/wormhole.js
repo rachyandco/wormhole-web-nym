@@ -553,15 +553,22 @@ export async function sendFile(file, nymClient, callbacks) {
         onComplete();
         return;
       } else if (payload.type === 'Retransmit') {
-        // Re-send the requested chunk and 31 following ones proactively
-        const counter  = payload.counter;        // BigInt — the Msg::Encrypted counter
-        const chunkIdx = Number(counter) - 1;    // Offer is counter 0, Chunk_0 is counter 1
-        const end = Math.min(chunkIdx + 32, chunks.length);
-        onStatus(`Retransmitting chunks ${chunkIdx}–${end - 1}…`);
-        for (let i = chunkIdx; i < end; i++) {
-          if (i < 0 || i >= chunks.length) continue;
-          await rawSend(nymClient, receiverAddr,
-            sealMsg(sendKey, ctrNext(sendCtr), { type: 'Chunk', seq: BigInt(i), data: chunks[i] }), onPacketSent);
+        // Re-send using the ORIGINAL counter values — matches send.rs exactly.
+        // counter 0 = Offer, counters 1..totalChunks = Chunks, counter totalChunks+1 = Done.
+        const reqCtr    = payload.counter;   // BigInt — first missing Msg::Encrypted counter
+        const windowEnd = reqCtr + 32n < totalChunks + 2n ? reqCtr + 32n : totalChunks + 2n;
+        onStatus(`Retransmitting counters ${reqCtr}–${windowEnd - 1n}…`);
+        for (let ctr = reqCtr; ctr < windowEnd; ctr++) {
+          let retransmitPayload;
+          if (ctr === 0n) {
+            retransmitPayload = { type: 'Offer', filename: file.name, filesize: BigInt(fileBytes.length), sha256: fileHash };
+          } else if (ctr <= totalChunks) {
+            const idx = Number(ctr) - 1;
+            retransmitPayload = { type: 'Chunk', seq: ctr - 1n, data: chunks[idx] };
+          } else {
+            retransmitPayload = { type: 'Done', total_chunks: totalChunks };
+          }
+          await rawSend(nymClient, receiverAddr, sealMsg(sendKey, ctr, retransmitPayload), onPacketSent);
         }
       } else if (payload.type === 'Error') {
         throw new Error(`Receiver error: ${payload.message}`);

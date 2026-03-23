@@ -1,6 +1,6 @@
 {
   "name": "wormhole-web-nym",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "P2P file transfer over the Nym mixnet — browser version of wormhole-nym",
   "private": true,
   "type": "module",
@@ -13,7 +13,8 @@
     "@noble/ciphers": "^0.5.3",
     "@noble/curves": "^1.4.2",
     "@noble/hashes": "^1.4.0",
-    "@nymproject/sdk-full-fat": "^1.4.1"
+    "@nymproject/sdk-full-fat": "^1.4.1",
+    "wormhole-nym-wasm": "file:../wormhole-nym/wasm/pkg"
   },
   "devDependencies": {
     "vite": "^5.0.0"
