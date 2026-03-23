@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background: dark rounded square -->
+  <rect width="32" height="32" rx="7" fill="#0f1117"/>
+  <!-- Stylised N: two vertical bars connected by a diagonal, NYM-purple -->
+  <path d="M7 24V8h3.2l10.4 11.2V8H24v16h-3.2L10.4 12.8V24H7z" fill="#7c6af7"/>
+</svg>
