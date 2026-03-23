@@ -292,7 +292,12 @@ $('btn-send-start').addEventListener('click', async () => {
         setProgress('progress-s-fill', sent, total);
         setStatus('status-s-progress', `${formatBytes(sent)} / ${formatBytes(total)}`);
       },
-      onComplete: () => showOnly(['step-s-done'], sendPanel),
+      onComplete: () => {
+        selectedFile = null;
+        $('file-input').value = '';
+        $('btn-send-start').disabled = true;
+        showOnly(['step-s-done'], sendPanel);
+      },
     });
   } catch (err) {
     showOnly(['step-s-file'], sendPanel);
