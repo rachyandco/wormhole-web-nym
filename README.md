@@ -4,7 +4,13 @@ Browser-based file transfer over the [Nym mixnet](https://nymtech.net), fully co
 
 No relay server. End-to-end encrypted. Sender anonymity via the mixnet.
 
-## Quick start
+## Live instance
+
+A hosted instance is available at **https://rachyandco.github.io/wormhole-web-nym/**
+
+No installation required — open the page and start transferring files.
+
+## Run locally
 
 ```bash
 npm install
