@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Wormhole-Nym Web</title>
-  <script type="module" crossorigin src="/wormhole-web-nym/assets/index-DGuoD08D.js"></script>
-  <link rel="stylesheet" crossorigin href="/wormhole-web-nym/assets/index-x_fL3e42.css">
+  <script type="module" crossorigin src="/wormhole-web-nym/assets/index-BEb9Y2Hj.js"></script>
+  <link rel="stylesheet" crossorigin href="/wormhole-web-nym/assets/index-r2nqpWKB.css">
 </head>
 <body>
 
@@ -20,6 +20,30 @@
   <div class="tabs">
     <button id="tab-receive" class="tab active">Receive a file</button>
     <button id="tab-send"    class="tab">Send a file</button>
+  </div>
+
+  <!-- ══════════════════════════ MIXNET STATUS CARD ═════════════════════════ -->
+  <div id="mixnet-card" class="mixnet-card hidden">
+    <div class="mixnet-header">
+      <span id="conn-dot" class="conn-dot connecting"></span>
+      <span id="conn-text">Initializing Nym WebAssembly client…</span>
+      <span id="conn-gateway" class="conn-gateway"></span>
+    </div>
+    <div class="mixnet-viz">
+      <span class="node-label">You</span>
+      <div class="mix-path">
+        <div class="mix-line"></div>
+        <div class="mix-node" style="left:25%"></div>
+        <div class="mix-node" style="left:50%"></div>
+        <div class="mix-node" style="left:75%"></div>
+        <div id="pkt-lane"></div>
+      </div>
+      <span class="node-label" style="text-align:right">Peer</span>
+    </div>
+    <div class="mixnet-footer">
+      <span id="pkt-sent" class="pkt-count pkt-out">&#8593; 0 sent</span>
+      <span id="pkt-recv" class="pkt-count pkt-in">&#8595; 0 received</span>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════ RECEIVE PANEL ══════════════════════════ -->
