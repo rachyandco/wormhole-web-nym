@@ -174,6 +174,22 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   user-select: all;
 }
 
+/* Shareable link */
+.link-box-wrap { margin-top: 4px; }
+.wormhole-link {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-family: 'Fira Mono', 'Consolas', monospace;
+  font-size: 0.8rem;
+  color: var(--accent);
+  word-break: break-all;
+  text-decoration: none;
+}
+.wormhole-link:hover { text-decoration: underline; }
+
 /* Progress */
 .progress-track {
   width: 100%;

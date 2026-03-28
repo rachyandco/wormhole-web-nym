@@ -310,6 +310,10 @@ $('btn-send-start').addEventListener('click', async () => {
       onPacketReceived,
       onCode: code => {
         $('wormhole-code').textContent = code;
+        const link = window.location.origin + window.location.pathname + '?code=' + encodeURIComponent(code);
+        const linkEl = $('wormhole-link');
+        linkEl.href = link;
+        linkEl.textContent = link;
         showOnly(['step-s-waiting', 'step-s-progress'], sendPanel);
         setStatus('status-s-progress', 'Waiting for receiver…');
       },
@@ -335,7 +339,14 @@ $('btn-send-start').addEventListener('click', async () => {
 $('btn-copy-code').addEventListener('click', () => {
   navigator.clipboard.writeText($('wormhole-code').textContent).then(() => {
     $('btn-copy-code').textContent = 'Copied!';
-    setTimeout(() => { $('btn-copy-code').textContent = 'Copy'; }, 2000);
+    setTimeout(() => { $('btn-copy-code').textContent = 'Copy code'; }, 2000);
+  });
+});
+
+$('btn-copy-link').addEventListener('click', () => {
+  navigator.clipboard.writeText($('wormhole-link').href).then(() => {
+    $('btn-copy-link').textContent = 'Copied!';
+    setTimeout(() => { $('btn-copy-link').textContent = 'Copy link'; }, 2000);
   });
 });
 
@@ -347,3 +358,18 @@ $('btn-send-again').addEventListener('click', () => {
   showOnly(['step-s-file'], sendPanel);
   setStatus('status-s-file', '');
 });
+
+// ── Auto-fill code from URL query param and auto-connect ──────────────────────
+
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (!code) return;
+  $('code-input').value = code;
+  // Switch to receive tab
+  $('tab-receive').classList.add('active');
+  $('tab-send').classList.remove('active');
+  show('panel-receive'); hide('panel-send');
+  // Auto-trigger connect
+  $('btn-connect').click();
+})();

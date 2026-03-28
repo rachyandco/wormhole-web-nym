@@ -200,21 +200,38 @@ export async function receiveFile(code, nymClient, callbacks) {
       }
     });
 
-    // ── Send Hello ────────────────────────────────────────────────────────────
-    await rawSend(nymClient, senderAddr, encodeMsg({
+    const helloBytes = encodeMsg({
       type: 'Hello',
       receiver_address: ourAddr,
       pake_msg: spakeState.msg,
-    }), onPacketSent);
+    });
 
+    // ── Send Hello ────────────────────────────────────────────────────────────
+    await rawSend(nymClient, senderAddr, helloBytes, onPacketSent);
     onStatus('Waiting for sender SPAKE2 reply…');
 
-    // ── Wait for PakeReply ────────────────────────────────────────────────────
-    let pakeReplyMsg;
-    {
-      const { ok } = await rawQ.next(60_000);
-      pakeReplyMsg = decodeMsg(ok);
+    // ── Wait for PakeReply (with Hello retry) ─────────────────────────────────
+    // Hello or PakeReply can be lost in the mixnet; retry Hello up to 4 times.
+    const PAKE_WAIT_MS  = 30_000;
+    const MAX_RETRIES   = 4;
+    let pakeReplyMsg = null;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        onStatus(`No reply from sender, retrying (${attempt}/${MAX_RETRIES})…`);
+        await rawSend(nymClient, senderAddr, helloBytes, onPacketSent);
+        onStatus('Waiting for sender SPAKE2 reply…');
+      }
+      try {
+        const { ok } = await rawQ.next(PAKE_WAIT_MS);
+        pakeReplyMsg = decodeMsg(ok);
+        break;
+      } catch {
+        if (attempt === MAX_RETRIES)
+          throw new Error('Sender did not respond. Is the sender still running?');
+      }
     }
+
     if (pakeReplyMsg.type !== 'PakeReply')
       throw new Error(`Expected PakeReply, got ${pakeReplyMsg.type}`);
 
@@ -398,8 +415,9 @@ export async function sendFile(file, nymClient, callbacks) {
     onStatus('Receiver connected. Completing key exchange…');
 
     // ── Send PakeReply ────────────────────────────────────────────────────────
-    await rawSend(nymClient, receiverAddr,
-      encodeMsg({ type: 'PakeReply', pake_msg: spakeState.msg }), onPacketSent);
+    // Cache so we can resend if the receiver retries Hello (lost PakeReply case).
+    const pakeReplyBytes = encodeMsg({ type: 'PakeReply', pake_msg: spakeState.msg });
+    await rawSend(nymClient, receiverAddr, pakeReplyBytes, onPacketSent);
 
     // ── Complete SPAKE2 ───────────────────────────────────────────────────────
     // peerMsg = Hello.pake_msg (side B's SPAKE2 message)
@@ -479,12 +497,21 @@ export async function sendFile(file, nymClient, callbacks) {
     }
 
     if (!readyFound) {
-      // Wait for Ready to arrive
+      // Wait for Ready to arrive.
+      // If a duplicate Hello arrives (receiver retried because PakeReply was lost),
+      // resend PakeReply so the receiver can complete key exchange.
+      const READY_DEADLINE = Date.now() + 3 * 60_000;
       while (true) {
-        const { ok } = await rawQ.next(30_000);
+        const remaining = READY_DEADLINE - Date.now();
+        if (remaining <= 0) throw new Error('Timed out waiting for receiver to be ready');
+        const { ok } = await rawQ.next(Math.min(remaining, 30_000));
         const msg = decodeMsg(ok);
         if (msg.type === 'Ready') break;
         if (msg.type === 'Encrypted') payBuf.feed(recvKey, msg);
+        if (msg.type === 'Hello' && msg.receiver_address === receiverAddr) {
+          // Receiver retried — PakeReply was lost, resend it
+          rawSend(nymClient, receiverAddr, pakeReplyBytes, onPacketSent);
+        }
       }
     }
 
