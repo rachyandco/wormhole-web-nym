@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Wormhole-Nym Web</title>
   <link rel="icon" type="image/svg+xml" href="/wormhole-web-nym/favicon.svg" />
-  <script type="module" crossorigin src="/wormhole-web-nym/assets/index-qyg0iKK9.js"></script>
-  <link rel="stylesheet" crossorigin href="/wormhole-web-nym/assets/index-BuX0-_t4.css">
+  <script type="module" crossorigin src="/wormhole-web-nym/assets/index-C4a2LJCV.js"></script>
+  <link rel="stylesheet" crossorigin href="/wormhole-web-nym/assets/index-bnWuRqM1.css">
 </head>
 <body>
 
@@ -123,9 +123,13 @@
       <h2>Your wormhole code</h2>
       <div id="wormhole-code" class="code-box"></div>
       <div class="btn-row">
-        <button id="btn-copy-code" class="btn-ghost">Copy</button>
+        <button id="btn-copy-code" class="btn-ghost">Copy code</button>
+        <button id="btn-copy-link" class="btn-ghost">Copy link</button>
       </div>
-      <p class="status">Share this code with the receiver. Keep this page open until the transfer is complete.</p>
+      <div class="link-box-wrap">
+        <a id="wormhole-link" class="wormhole-link" href="#" target="_blank" rel="noopener"></a>
+      </div>
+      <p class="status">Share this code or link with the receiver. Keep this page open until the transfer is complete.</p>
     </div>
 
     <!-- Step 4: sending chunks (shown alongside waiting) -->
