@@ -3,6 +3,7 @@
  */
 
 import { createNymMixnetClient } from '@nymproject/sdk-full-fat';
+import qrcode from 'qrcode-generator';
 import { receiveFile, sendFile } from './wormhole.js';
 
 const NYM_API_URL = 'https://validator.nymtech.net/api';
@@ -38,6 +39,44 @@ function formatBytes(bytes) {
   if (n < 1048576)    return `${(n/1024).toFixed(1)} KiB`;
   if (n < 1073741824) return `${(n/1048576).toFixed(1)} MiB`;
   return `${(n/1073741824).toFixed(2)} GiB`;
+}
+
+// ── Screen Wake Lock ──────────────────────────────────────────────────────────
+// Browsers release the wake lock automatically when the page becomes hidden,
+// so we track intent separately and re-request on visibilitychange.
+
+let wakeLock     = null;
+let wantWakeLock = false;
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (err) {
+    console.warn('Wake lock request failed:', err);
+  }
+}
+
+function releaseWakeLock() {
+  wantWakeLock = false;
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (wantWakeLock && document.visibilityState === 'visible' && !wakeLock) {
+    acquireWakeLock();
+  }
+});
+
+// ── QR code rendering ──────────────────────────────────────────────────────────
+
+function renderQR(targetEl, text) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  targetEl.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
 }
 
 // ── Mixnet visualization ───────────────────────────────────────────────────────
@@ -218,12 +257,16 @@ $('btn-connect').addEventListener('click', async () => {
   showOnly(['step-r-connecting'], receivePanel);
   setStatus('status-r-connect', 'Initializing…');
 
+  wantWakeLock = true;
+  acquireWakeLock();
+
   try {
     await initNym(text => setStatus('status-r-connect', text));
   } catch (err) {
     showOnly(['step-r-code'], receivePanel);
     $('btn-connect').disabled = false;
     setStatus('status-r-code', `Connection failed: ${err.message}`, 'error');
+    releaseWakeLock();
     return;
   }
 
@@ -269,6 +312,8 @@ $('btn-connect').addEventListener('click', async () => {
     showOnly(['step-r-code'], receivePanel);
     $('btn-connect').disabled = false;
     setStatus('status-r-code', `Error: ${err.message}`, 'error');
+  } finally {
+    releaseWakeLock();
   }
 });
 
@@ -295,12 +340,16 @@ $('btn-send-start').addEventListener('click', async () => {
   showOnly(['step-s-connecting'], sendPanel);
   setStatus('status-s-connect', 'Initializing…');
 
+  wantWakeLock = true;
+  acquireWakeLock();
+
   try {
     await initNym(text => setStatus('status-s-connect', text));
   } catch (err) {
     showOnly(['step-s-file'], sendPanel);
     $('btn-send-start').disabled = false;
     setStatus('status-s-file', `Connection failed: ${err.message}`, 'error');
+    releaseWakeLock();
     return;
   }
 
@@ -314,6 +363,18 @@ $('btn-send-start').addEventListener('click', async () => {
         const linkEl = $('wormhole-link');
         linkEl.href = link;
         linkEl.textContent = link;
+        renderQR($('qr-code'), link);
+        const shareBtn = $('btn-share');
+        if (navigator.share) {
+          shareBtn.classList.remove('hidden');
+          shareBtn.onclick = () => {
+            navigator.share({
+              title: 'Wormhole-Nym file transfer',
+              text:  'Receive a file via the Nym mixnet:',
+              url:   link,
+            }).catch(() => {});
+          };
+        }
         showOnly(['step-s-waiting', 'step-s-progress'], sendPanel);
         setStatus('status-s-progress', 'Waiting for receiver…');
       },
@@ -333,6 +394,8 @@ $('btn-send-start').addEventListener('click', async () => {
     showOnly(['step-s-file'], sendPanel);
     $('btn-send-start').disabled = false;
     setStatus('status-s-file', `Error: ${err.message}`, 'error');
+  } finally {
+    releaseWakeLock();
   }
 });
 
@@ -355,6 +418,8 @@ $('btn-send-again').addEventListener('click', () => {
   $('file-input').value = '';
   $('btn-send-start').disabled = true;
   $('wormhole-code').textContent = '';
+  $('qr-code').innerHTML = '';
+  $('btn-share').classList.add('hidden');
   showOnly(['step-s-file'], sendPanel);
   setStatus('status-s-file', '');
 });
