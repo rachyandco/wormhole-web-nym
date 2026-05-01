@@ -17,6 +17,33 @@
 
 <main>
 
+  <!-- How it works -->
+  <details id="how-it-works" class="info-box">
+    <summary>How does this work?</summary>
+    <div class="info-body">
+      <p>
+        A full <a href="https://nym.com" target="_blank" rel="noopener">Nym</a> mixnet client runs
+        right in your browser via WebAssembly — there is no relay server in the middle. The file
+        moves directly from sender to receiver, end-to-end encrypted, with sender anonymity
+        provided by the mixnet.
+      </p>
+      <p>
+        Tested with files up to ~50&nbsp;MB. Larger files should work but will take longer:
+        the mixnet trades throughput for anonymity.
+      </p>
+      <p>
+        It speaks the same wire protocol as the
+        <a href="https://github.com/rachyandco/wormhole-nym" target="_blank" rel="noopener">wormhole-nym</a>
+        CLI, so a browser sender can hand a file to a CLI receiver (and vice-versa). The crypto
+        and protocol primitives are compiled from the very same Rust crate the CLI uses.
+      </p>
+      <p>
+        Source code and issues:
+        <a href="https://github.com/rachyandco/wormhole-web-nym" target="_blank" rel="noopener">github.com/rachyandco/wormhole-web-nym</a>.
+      </p>
+    </div>
+  </details>
+
   <!-- Tab bar -->
   <div class="tabs">
     <button id="tab-send"    class="tab active">Send a file</button>
