@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite';
+import wasm from 'vite-plugin-wasm';
 
 export default defineConfig({
   // On GitHub Pages the site lives at /wormhole-web-nym/.
   // Locally (npm run dev / npm run preview) it stays at /.
   base: process.env.VITE_BASE_URL ?? '/',
+
+  plugins: [wasm()],
 
   optimizeDeps: {
     // sdk-full-fat inlines WASM as base64; pre-bundling breaks it.

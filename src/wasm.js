@@ -1,23 +1,19 @@
 /**
  * WASM bridge for wormhole-nym-core.
  *
- * Initialises the wasm module once at ES-module load time (top-level await,
- * supported by Vite with target: 'esnext') and re-exports the crypto API
- * under the same names used by the original spake2.js / crypto.js so that
- * wormhole.js / protocol.js require no import changes.
+ * The published package is built with `wasm-pack --target bundler`: WASM is
+ * initialised synchronously when this module is first imported. Vite resolves
+ * the `.wasm` static import via `vite-plugin-wasm`.
  */
 
-import initWasm, {
+import {
   Spake2SenderState,
   Spake2ReceiverState,
   wasm_derive_keys,
   wasm_encrypt,
   wasm_decrypt,
   wasm_sha256,
-} from './wasm-pkg/wormhole_nym_wasm.js';
-
-// One-time async init — all importing modules wait for this before running.
-await initWasm();
+} from '@rachyandco/wormhole-nym-wasm';
 
 // ── SPAKE2 — same API as the original spake2.js ───────────────────────────────
 

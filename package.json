@@ -14,9 +14,11 @@
     "@noble/curves": "^1.4.2",
     "@noble/hashes": "^1.4.0",
     "@nymproject/sdk-full-fat": "^1.4.1",
+    "@rachyandco/wormhole-nym-wasm": "^0.1.6",
     "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "vite-plugin-wasm": "^3.6.0"
   }
 }
