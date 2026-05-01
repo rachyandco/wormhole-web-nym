@@ -1,12 +1,12 @@
 # wormhole-web-nym
 
-Browser-based file transfer over the [Nym mixnet](https://nymtech.net), fully compatible with the [wormhole-nym CLI](https://github.com/rachyandco/wormhole-nym).
+Browser-based file transfer over the [Nym mixnet](https://nym.com), fully compatible with the [wormhole-nym CLI](https://github.com/rachyandco/wormhole-nym).
 
 No relay server. End-to-end encrypted. Sender anonymity via the mixnet.
 
 ## Live instance
 
-A hosted instance is available at **https://rachyandco.github.io/wormhole-web-nym/**
+A hosted instance is available at **https://nymtransfer.com**
 
 No installation required — open the page and start transferring files.
 
@@ -40,10 +40,13 @@ wormhole-nym send myfile.zip
 ### Send a file to the CLI receiver
 
 1. Open the web app → **Send a file** tab
-2. Select your file → **Start transfer**
-3. The app generates a wormhole code — copy and share it
+2. Select your file → **Nym it (Start transfer)**
+3. The app generates a wormhole code. Share it via:
+   - **Copy code** / **Copy link** (paste into any chat)
+   - **Share…** (mobile native share sheet, when available)
+   - The QR code (in-person hand-off — receiver scans on another device)
 4. CLI side runs: `wormhole-nym receive calm-fork-road:8yGFbT5ksq…`
-5. Keep the page open until the progress bar reaches 100% and the receiver confirms
+5. Keep the page open and visible until the progress bar reaches 100% and the receiver confirms. On mobile, the app holds a screen Wake Lock while a transfer is active and re-checks the Nym connection on resume, but switching away from the browser may still interrupt the transfer.
 
 ### Web-to-web
 
@@ -53,57 +56,38 @@ Works the same way — one side sends, the other receives. Both use this web app
 
 ```
 src/
-  bincode.js      Bincode 1.x encoder/decoder (compatible with Rust crate)
+  wasm.js         Bridge to @rachyandco/wormhole-nym-wasm (SPAKE2, crypto, hashing)
+  spake2.js       Re-exports SPAKE2 helpers from wasm.js
+  crypto.js       Re-exports symmetric crypto helpers from wasm.js
+  bincode.js      Bincode 1.x encoder/decoder (matches the Rust wire format)
   words.js        512-word list (identical to CLI) + password generator
-  spake2.js       SPAKE2 over Ed25519 (compatible with Rust spake2 v0.4.0)
-  crypto.js       ChaCha20-Poly1305, key derivation, SHA-256
   protocol.js     Msg + Payload encode/decode; seal/open helpers
+  mixnet.js       Thin wrapper around the Nym SDK with restart/re-subscribe
   wormhole.js     Receiver and sender state machines
-  main.js         UI logic
-  style.css       Dark theme CSS
+  main.js         UI logic (tabs, QR code, Web Share, Wake Lock)
+  style.css       Dark + light theme CSS
 ```
 
-### Protocol compatibility
+### Shared protocol with the CLI
 
-The web app speaks exactly the same binary protocol as the CLI:
+The crypto and protocol primitives (SPAKE2, ChaCha20-Poly1305, SHA-256, key derivation) are compiled from the same Rust source the CLI uses, via the [`@rachyandco/wormhole-nym-wasm`](https://www.npmjs.com/package/@rachyandco/wormhole-nym-wasm) npm package. That package is the `wasm/` crate of [wormhole-nym](https://github.com/rachyandco/wormhole-nym) built with `wasm-pack --target bundler`, so wire-format compatibility with the CLI is bit-perfect by construction.
 
-| Layer          | CLI (Rust)              | Web (JS)                         |
-|----------------|-------------------------|----------------------------------|
-| Mixnet         | `nym-sdk 1.20.4`        | `@nymproject/sdk-full-fat 1.4.1` |
-| Transport      | `send_plain_message`    | `rawSend` / `subscribeToRawMessageReceivedEvent` |
-| Serialization  | `bincode 1`             | custom `bincode.js`              |
-| Key exchange   | `spake2 0.4 Ed25519`    | `@noble/curves` ed25519          |
-| Encryption     | `chacha20poly1305 0.10` | `@noble/ciphers` chacha          |
-| Hashing        | `sha2 0.10`             | `@noble/hashes` sha256           |
+| Layer          | CLI (Rust)              | Web (JS)                                            |
+|----------------|-------------------------|-----------------------------------------------------|
+| Mixnet         | `nym-sdk 1.20.4`        | `@nymproject/sdk-full-fat 1.4.1`                    |
+| Transport      | `send_plain_message`    | `rawSend` / `subscribeToRawMessageReceivedEvent`    |
+| Serialization  | `bincode 1`             | custom `bincode.js`                                 |
+| SPAKE2         | `spake2 0.4 Ed25519`    | `@rachyandco/wormhole-nym-wasm` (same Rust crate)   |
+| Encryption     | `chacha20poly1305 0.10` | `@rachyandco/wormhole-nym-wasm` (same Rust crate)   |
+| Hashing        | `sha2 0.10`             | `@rachyandco/wormhole-nym-wasm` (same Rust crate)   |
+
+The package is bundler-target, so Vite resolves the `.wasm` static import via `vite-plugin-wasm` (configured in `vite.config.js`).
 
 ### Nym SDK note
 
-The Nym WebAssembly client (`sdk-full-fat`) inlines the compiled WASM as base64, so no separate WASM file loading is needed. The bundle is ~7 MB; gzip reduces it to ~2.8 MB.
+The Nym WebAssembly client (`sdk-full-fat`) inlines its own compiled WASM as base64, so no separate WASM file loading is needed for the mixnet client. The full bundle is ~6.6 MB JS + ~228 KB WASM; gzip reduces it to ~2.9 MB.
 
-First connection to the Nym mixnet takes 20–40 seconds while the client registers with a gateway.
-
-## Suggested changes to wormhole-nym CLI for shared protocol logic
-
-To avoid duplicating protocol logic, the CLI could be restructured so that the core protocol (message types, SPAKE2 setup, crypto) is in a library crate that both the CLI binary and a future `wormhole-nym-wasm` WebAssembly target depend on:
-
-```
-wormhole-nym/
-  lib/             # protocol, crypto, words — no tokio, no nym-sdk
-    src/
-      protocol.rs
-      crypto.rs
-      words.rs
-  cli/             # nym-sdk transport + clap
-    src/
-      main.rs
-      send.rs
-      receive.rs
-  wasm/            # wasm-bindgen bindings exposing seal/open/spake2
-    src/
-      lib.rs
-```
-
-The web app could then import `wormhole-nym-wasm` directly for the crypto/protocol layer instead of reimplementing it in JS, while keeping the Nym JS SDK for transport. This guarantees bit-perfect compatibility.
+First connection to the Nym mixnet takes 20–40 seconds while the client registers with a gateway. The same `clientId` is reused across reloads (persisted in `localStorage`) so the Nym address is stable as long as the gateway re-accepts the registration.
 
 ## License
 
