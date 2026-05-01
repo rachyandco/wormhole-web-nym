@@ -10,11 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@noble/ciphers": "^0.5.3",
-    "@noble/curves": "^1.4.2",
-    "@noble/hashes": "^1.4.0",
     "@nymproject/sdk-full-fat": "^1.4.1",
-    "@rachyandco/wormhole-nym-wasm": "^0.1.6",
+    "@rachyandco/wormhole-nym-wasm": "^0.1.7",
     "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
