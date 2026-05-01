@@ -1,8 +1,8 @@
 /**
  * Wormhole-nym protocol state machines for browser use.
  *
- * receiveFile(code, nymClient, callbacks)  — side B (receiver)
- * sendFile(file, nymClient, callbacks)     — side A (sender)
+ * receiveFile(code, mixnet, callbacks)  — side B (receiver)
+ * sendFile(file, mixnet, callbacks)     — side A (sender)
  *
  * Both use rawSend / subscribeToRawMessageReceivedEvent for binary
  * compatibility with the wormhole-nym CLI (send_plain_message / next().await).
@@ -31,8 +31,8 @@ const CHUNK_SIZE = 32 * 1024; // 32 KiB — matches CLI
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function rawSend(nymClient, recipient, bytes, onPacketSent) {
-  await nymClient.client.rawSend({ payload: bytes, recipient });
+async function rawSend(mixnet, recipient, bytes, onPacketSent) {
+  await mixnet.rawSend(recipient, bytes);
   onPacketSent?.();
 }
 
@@ -155,7 +155,7 @@ class PayloadBuffer {
  *   onProgress(received, total)— BigInts
  *   onComplete(filename, blob) — transfer finished, browser download triggered by caller
  */
-export async function receiveFile(code, nymClient, callbacks) {
+export async function receiveFile(code, mixnet, callbacks) {
   const { onStatus, onOffer, onProgress, onComplete, onPacketSent, onPacketReceived } = callbacks;
   let unsub = null;
 
@@ -171,7 +171,7 @@ export async function receiveFile(code, nymClient, callbacks) {
     // ── SPAKE2 start ──────────────────────────────────────────────────────────
     onStatus('Starting SPAKE2 key exchange…');
     const spakeState = spake2StartReceiver(pwBytes);
-    const ourAddr    = await nymClient.client.selfAddress();
+    const ourAddr    = mixnet.address;
 
     // ── Single message router (raw bytes → Queue or PayloadBuffer) ────────────
     // We use ONE subscription the whole time and route based on state.
@@ -180,7 +180,7 @@ export async function receiveFile(code, nymClient, callbacks) {
     let keysReady = false;
     let sendKey   = null;
 
-    unsub = nymClient.events.subscribeToRawMessageReceivedEvent(e => {
+    unsub = mixnet.subscribe(e => {
       onPacketReceived?.();
       const bytes = e.args.payload;
       if (!keysReady) {
@@ -207,7 +207,7 @@ export async function receiveFile(code, nymClient, callbacks) {
     });
 
     // ── Send Hello ────────────────────────────────────────────────────────────
-    await rawSend(nymClient, senderAddr, helloBytes, onPacketSent);
+    await rawSend(mixnet, senderAddr, helloBytes, onPacketSent);
     onStatus('Waiting for sender SPAKE2 reply…');
 
     // ── Wait for PakeReply (with Hello retry) ─────────────────────────────────
@@ -219,7 +219,7 @@ export async function receiveFile(code, nymClient, callbacks) {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (attempt > 0) {
         onStatus(`No reply from sender, retrying (${attempt}/${MAX_RETRIES})…`);
-        await rawSend(nymClient, senderAddr, helloBytes, onPacketSent);
+        await rawSend(mixnet, senderAddr, helloBytes, onPacketSent);
         onStatus('Waiting for sender SPAKE2 reply…');
       }
       try {
@@ -255,7 +255,7 @@ export async function receiveFile(code, nymClient, callbacks) {
     onStatus('Key exchange complete. Sending Ready…');
 
     // ── Send Ready ────────────────────────────────────────────────────────────
-    await rawSend(nymClient, senderAddr, encodeMsg({ type: 'Ready' }), onPacketSent);
+    await rawSend(mixnet, senderAddr, encodeMsg({ type: 'Ready' }), onPacketSent);
 
     onStatus('Waiting for file offer…');
 
@@ -271,14 +271,14 @@ export async function receiveFile(code, nymClient, callbacks) {
     });
 
     if (!accepted) {
-      await rawSend(nymClient, senderAddr,
+      await rawSend(mixnet, senderAddr,
         sealMsg(recvKey, ctrNext(recvCtr), { type: 'Reject', reason: 'User declined' }), onPacketSent);
       onStatus('Transfer rejected.');
       return;
     }
 
     // ── Send Accept ───────────────────────────────────────────────────────────
-    await rawSend(nymClient, senderAddr,
+    await rawSend(mixnet, senderAddr,
       sealMsg(recvKey, ctrNext(recvCtr), { type: 'Accept' }), onPacketSent);
     onStatus('Receiving file…');
 
@@ -301,7 +301,7 @@ export async function receiveFile(code, nymClient, callbacks) {
           lastRetransmitMs = now;
           const missing = payBuf.nextExpected();
           onStatus(`Gap detected, requesting retransmit of slot ${missing}…`);
-          await rawSend(nymClient, senderAddr,
+          await rawSend(mixnet, senderAddr,
             sealMsg(recvKey, ctrNext(recvCtr), { type: 'Retransmit', counter: missing }), onPacketSent);
         }
         continue;
@@ -337,7 +337,7 @@ export async function receiveFile(code, nymClient, callbacks) {
       throw new Error('File integrity check failed (SHA-256 mismatch). File may be corrupted.');
 
     // ── Send Ack ──────────────────────────────────────────────────────────────
-    await rawSend(nymClient, senderAddr,
+    await rawSend(mixnet, senderAddr,
       sealMsg(recvKey, ctrNext(recvCtr), { type: 'Ack', sha256: computedHash }), onPacketSent);
 
     onStatus('Transfer complete!');
@@ -359,7 +359,7 @@ export async function receiveFile(code, nymClient, callbacks) {
  *   onProgress(sent, total)    — BigInts
  *   onComplete()               — receiver confirmed receipt
  */
-export async function sendFile(file, nymClient, callbacks) {
+export async function sendFile(file, mixnet, callbacks) {
   const { onCode, onStatus, onProgress, onComplete, onPacketSent, onPacketReceived } = callbacks;
   let unsub = null;
 
@@ -373,7 +373,7 @@ export async function sendFile(file, nymClient, callbacks) {
     // ── Generate wormhole code ────────────────────────────────────────────────
     const password = generatePassword(3);
     const pwBytes  = new TextEncoder().encode(password);
-    const ourAddr  = await nymClient.client.selfAddress();
+    const ourAddr  = mixnet.address;
     onCode(`${password}:${ourAddr}`);
 
     onStatus('Waiting for receiver to connect (keep this page open)…');
@@ -387,7 +387,7 @@ export async function sendFile(file, nymClient, callbacks) {
     let keysReady = false;
     let recvKey   = null;
 
-    unsub = nymClient.events.subscribeToRawMessageReceivedEvent(e => {
+    unsub = mixnet.subscribe(e => {
       onPacketReceived?.();
       const bytes = e.args.payload;
       if (!keysReady) {
@@ -417,7 +417,7 @@ export async function sendFile(file, nymClient, callbacks) {
     // ── Send PakeReply ────────────────────────────────────────────────────────
     // Cache so we can resend if the receiver retries Hello (lost PakeReply case).
     const pakeReplyBytes = encodeMsg({ type: 'PakeReply', pake_msg: spakeState.msg });
-    await rawSend(nymClient, receiverAddr, pakeReplyBytes, onPacketSent);
+    await rawSend(mixnet, receiverAddr, pakeReplyBytes, onPacketSent);
 
     // ── Complete SPAKE2 ───────────────────────────────────────────────────────
     // peerMsg = Hello.pake_msg (side B's SPAKE2 message)
@@ -469,7 +469,7 @@ export async function sendFile(file, nymClient, callbacks) {
 
     // Re-sub with corrected router (non-Encrypted always go to rawQ)
     unsub();
-    unsub = nymClient.events.subscribeToRawMessageReceivedEvent(e => {
+    unsub = mixnet.subscribe(e => {
       onPacketReceived?.();
       const bytes = e.args.payload;
       try {
@@ -510,14 +510,14 @@ export async function sendFile(file, nymClient, callbacks) {
         if (msg.type === 'Encrypted') payBuf.feed(recvKey, msg);
         if (msg.type === 'Hello' && msg.receiver_address === receiverAddr) {
           // Receiver retried — PakeReply was lost, resend it
-          rawSend(nymClient, receiverAddr, pakeReplyBytes, onPacketSent);
+          rawSend(mixnet, receiverAddr, pakeReplyBytes, onPacketSent);
         }
       }
     }
 
     // ── Send Offer ────────────────────────────────────────────────────────────
     onStatus('Sending file offer…');
-    await rawSend(nymClient, receiverAddr,
+    await rawSend(mixnet, receiverAddr,
       sealMsg(sendKey, ctrNext(sendCtr), {
         type:     'Offer',
         filename: file.name,
@@ -546,14 +546,14 @@ export async function sendFile(file, nymClient, callbacks) {
     // ── Send all chunks ───────────────────────────────────────────────────────
     for (let i = 0; i < chunks.length; i++) {
       const data = chunks[i];
-      await rawSend(nymClient, receiverAddr,
+      await rawSend(mixnet, receiverAddr,
         sealMsg(sendKey, ctrNext(sendCtr), { type: 'Chunk', seq: BigInt(i), data }), onPacketSent);
       bytesSent += BigInt(data.length);
       onProgress(bytesSent, fileSize);
     }
 
     // ── Send Done ─────────────────────────────────────────────────────────────
-    await rawSend(nymClient, receiverAddr,
+    await rawSend(mixnet, receiverAddr,
       sealMsg(sendKey, ctrNext(sendCtr), { type: 'Done', total_chunks: totalChunks }), onPacketSent);
 
     onStatus('File sent. Waiting for delivery confirmation…');
@@ -595,7 +595,7 @@ export async function sendFile(file, nymClient, callbacks) {
           } else {
             retransmitPayload = { type: 'Done', total_chunks: totalChunks };
           }
-          await rawSend(nymClient, receiverAddr, sealMsg(sendKey, ctr, retransmitPayload), onPacketSent);
+          await rawSend(mixnet, receiverAddr, sealMsg(sendKey, ctr, retransmitPayload), onPacketSent);
         }
       } else if (payload.type === 'Error') {
         throw new Error(`Receiver error: ${payload.message}`);

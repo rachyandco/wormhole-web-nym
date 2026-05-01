@@ -2,18 +2,27 @@
  * Wormhole-Nym Web — UI entry point.
  */
 
-import { createNymMixnetClient } from '@nymproject/sdk-full-fat';
 import qrcode from 'qrcode-generator';
+import { Mixnet } from './mixnet.js';
 import { receiveFile, sendFile } from './wormhole.js';
 
-const NYM_API_URL = 'https://validator.nymtech.net/api';
-const NYM_FORCE_TLS = true;
+const NYM_API_URL    = 'https://validator.nymtech.net/api';
+const NYM_FORCE_TLS  = true;
+const CLIENT_ID_KEY  = 'wormhole-web-client-id';
 
 // ── State ──────────────────────────────────────────────────────────────────────
-let nymClient      = null;
-let nymAddress     = null;
-let nymReady       = false;
+const mixnet = new Mixnet();
 let nymInitPromise = null;
+let activeTransfer = false;
+
+function getOrCreateClientId() {
+  let id = localStorage.getItem(CLIENT_ID_KEY);
+  if (!id) {
+    id = `wormhole-web-${crypto.randomUUID().slice(0, 8)}`;
+    localStorage.setItem(CLIENT_ID_KEY, id);
+  }
+  return id;
+}
 
 // ── DOM helpers ────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -154,57 +163,67 @@ function onPacketReceived() {
 // ── Nym client init ────────────────────────────────────────────────────────────
 
 async function initNym(onStatusUpdate) {
-  if (nymReady) return;
+  if (mixnet.isStarted) return;
   if (nymInitPromise) return nymInitPromise;
 
   mixnetShow();
   mixnetSetState('connecting');
 
   nymInitPromise = (async () => {
-    onStatusUpdate('Creating Nym WebAssembly client…');
-    nymClient = await createNymMixnetClient();
-
-    await new Promise((resolve, reject) => {
-      let done = false;
-
-      nymClient.events.subscribeToConnected(e => {
-        if (done) return;
-        done = true;
-        clearTimeout(timeoutId);
-        nymAddress = e.args.address;
-        nymReady   = true;
-        mixnetSetState('connected', nymAddress);
-        resolve();
-      });
-
-      const clientId = `wormhole-web-${crypto.randomUUID().slice(0, 8)}`;
-      onStatusUpdate('Connecting to Nym mixnet (this may take ~30 s)…');
-
-      nymClient.client.start({
-        clientId,
+    try {
+      await mixnet.start({
+        clientId:  getOrCreateClientId(),
         nymApiUrl: NYM_API_URL,
         forceTls:  NYM_FORCE_TLS,
-      }).catch(err => {
-        if (done) return;
-        done = true;
-        clearTimeout(timeoutId);
-        mixnetSetState('error');
-        reject(err);
+        onStatus:  onStatusUpdate,
       });
-
-      const timeoutId = setTimeout(() => {
-        if (done) return;
-        done = true;
-        mixnetSetState('error');
-        reject(new Error('Nym connection timeout after 90 s'));
-      }, 90_000);
-    });
-
-    onStatusUpdate('Connected to Nym mixnet.');
+      mixnetSetState('connected', mixnet.address);
+      onStatusUpdate('Connected to Nym mixnet.');
+    } catch (err) {
+      mixnetSetState('error');
+      throw err;
+    } finally {
+      nymInitPromise = null;
+    }
   })();
 
   return nymInitPromise;
 }
+
+// ── Visibility-driven restart ──────────────────────────────────────────────────
+// Mobile browsers may suspend background tabs and drop the WebSocket to the
+// gateway. When the page becomes visible during an active transfer, probe the
+// SDK and restart it if the connection is dead. Reusing the same clientId
+// gives us the same Nym address back as long as the gateway re-accepts us.
+
+let restarting = false;
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!activeTransfer || !mixnet.isStarted || restarting) return;
+
+  const ok = await mixnet.healthcheck();
+  if (ok) return;
+
+  restarting = true;
+  mixnetSetState('connecting');
+  try {
+    const { addressChanged } = await mixnet.restart({
+      onStatus: text => console.info('[mixnet restart]', text),
+    });
+    mixnetSetState('connected', mixnet.address);
+    if (addressChanged) {
+      console.warn('Nym address changed after restart; existing wormhole code is no longer valid.');
+    } else {
+      console.info('Nym client restarted with same address.');
+    }
+  } catch (err) {
+    console.error('Nym restart failed:', err);
+    mixnetSetState('error');
+  } finally {
+    restarting = false;
+  }
+});
 
 // ── Dark / light theme toggle ──────────────────────────────────────────────────
 
@@ -270,8 +289,9 @@ $('btn-connect').addEventListener('click', async () => {
     return;
   }
 
+  activeTransfer = true;
   try {
-    await receiveFile(code, nymClient, {
+    await receiveFile(code, mixnet, {
       onStatus: text => setStatus('status-r-connect', text),
       onPacketSent,
       onPacketReceived,
@@ -313,6 +333,7 @@ $('btn-connect').addEventListener('click', async () => {
     $('btn-connect').disabled = false;
     setStatus('status-r-code', `Error: ${err.message}`, 'error');
   } finally {
+    activeTransfer = false;
     releaseWakeLock();
   }
 });
@@ -353,8 +374,9 @@ $('btn-send-start').addEventListener('click', async () => {
     return;
   }
 
+  activeTransfer = true;
   try {
-    await sendFile(selectedFile, nymClient, {
+    await sendFile(selectedFile, mixnet, {
       onPacketSent,
       onPacketReceived,
       onCode: code => {
@@ -395,6 +417,7 @@ $('btn-send-start').addEventListener('click', async () => {
     $('btn-send-start').disabled = false;
     setStatus('status-s-file', `Error: ${err.message}`, 'error');
   } finally {
+    activeTransfer = false;
     releaseWakeLock();
   }
 });
