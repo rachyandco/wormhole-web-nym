@@ -50,6 +50,11 @@
     <button id="tab-receive" class="tab">Receive a file</button>
   </div>
 
+  <!-- Active-transfer warning -->
+  <div id="transfer-warning" class="transfer-warning hidden" role="status">
+    ⚠ Transfer in progress — keep this tab open until it completes. Closing or navigating away will interrupt the transfer.
+  </div>
+
   <!-- ══════════════════════════ MIXNET STATUS CARD ═════════════════════════ -->
   <div id="mixnet-card" class="mixnet-card hidden">
     <div class="mixnet-header">
@@ -144,7 +149,13 @@
       </div>
     </div>
 
-    <!-- Step 3: waiting for receiver (code displayed here) -->
+    <!-- Step 3: sending chunks (shown alongside waiting; positioned above code) -->
+    <div id="step-s-progress" class="step card hidden">
+      <div class="progress-track"><div id="progress-s-fill" class="progress-fill"></div></div>
+      <span id="status-s-progress" class="status">Waiting for receiver…</span>
+    </div>
+
+    <!-- Step 4: waiting for receiver (code displayed here) -->
     <div id="step-s-waiting" class="step card hidden">
       <h2>Your wormhole code</h2>
       <div id="wormhole-code" class="code-box"></div>
@@ -162,12 +173,6 @@
       </div>
       <p class="status">Share this code or link with the receiver. Keep this page open and visible until the transfer is complete.</p>
       <p class="status warn">⚠ On mobile, leaving this page (e.g. switching apps) may interrupt the transfer. Use the QR code or the <em>Share…</em> button when possible.</p>
-    </div>
-
-    <!-- Step 4: sending chunks (shown alongside waiting) -->
-    <div id="step-s-progress" class="step card hidden">
-      <div class="progress-track"><div id="progress-s-fill" class="progress-fill"></div></div>
-      <span id="status-s-progress" class="status">Waiting for receiver…</span>
     </div>
 
     <!-- Step 5: done -->

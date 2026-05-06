@@ -50,6 +50,11 @@ function formatBytes(bytes) {
   return `${(n/1073741824).toFixed(2)} GiB`;
 }
 
+// ── Active-transfer warning ──────────────────────────────────────────────────
+
+function showTransferWarning() { show('transfer-warning'); }
+function hideTransferWarning() { hide('transfer-warning'); }
+
 // ── Screen Wake Lock ──────────────────────────────────────────────────────────
 // Browsers release the wake lock automatically when the page becomes hidden,
 // so we track intent separately and re-request on visibilitychange.
@@ -290,6 +295,7 @@ $('btn-connect').addEventListener('click', async () => {
   }
 
   activeTransfer = true;
+  showTransferWarning();
   try {
     await receiveFile(code, mixnet, {
       onStatus: text => setStatus('status-r-connect', text),
@@ -334,6 +340,7 @@ $('btn-connect').addEventListener('click', async () => {
     setStatus('status-r-code', `Error: ${err.message}`, 'error');
   } finally {
     activeTransfer = false;
+    hideTransferWarning();
     releaseWakeLock();
   }
 });
@@ -375,6 +382,7 @@ $('btn-send-start').addEventListener('click', async () => {
   }
 
   activeTransfer = true;
+  showTransferWarning();
   try {
     await sendFile(selectedFile, mixnet, {
       onPacketSent,
@@ -418,6 +426,7 @@ $('btn-send-start').addEventListener('click', async () => {
     setStatus('status-s-file', `Error: ${err.message}`, 'error');
   } finally {
     activeTransfer = false;
+    hideTransferWarning();
     releaseWakeLock();
   }
 });

@@ -311,6 +311,20 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 /* Done */
 .done-icon { font-size: 2.5rem; text-align: center; }
 
+/* ── Active-transfer warning ─────────────────────────────────────────────── */
+
+.transfer-warning {
+  background: color-mix(in srgb, #f0a030 18%, var(--surface));
+  border: 1px solid color-mix(in srgb, #f0a030 55%, var(--border));
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.45;
+}
+.transfer-warning.hidden { display: none; }
+
 /* ── Mixnet status card ──────────────────────────────────────────────────── */
 
 .mixnet-card {
