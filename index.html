@@ -48,6 +48,7 @@
   <div class="tabs">
     <button id="tab-send"    class="tab active"><span class="tab-icon" aria-hidden="true">↑</span> Send</button>
     <button id="tab-receive" class="tab"><span class="tab-icon" aria-hidden="true">↓</span> Receive</button>
+    <button id="tab-chat"    class="tab"><span class="tab-icon" aria-hidden="true">💬</span> Chat</button>
   </div>
 
   <!-- Active-transfer warning -->
@@ -213,6 +214,102 @@
     </div>
 
   </div><!-- /panel-send -->
+
+
+  <!-- ═══════════════════════════════ CHAT PANEL ═══════════════════════════ -->
+  <div id="panel-chat" class="panel hidden">
+
+    <!-- Step 1: room list / lobby -->
+    <div id="step-c-lobby" class="step card">
+      <h2>Chat rooms</h2>
+      <div id="room-list" class="room-list">
+        <p class="status">No rooms yet. Create one to get started.</p>
+      </div>
+      <div class="btn-row">
+        <button id="btn-create-room" class="btn-primary">+ Create room</button>
+        <button id="btn-refresh-identity" class="btn-ghost" title="Generate a new Nym address. Existing rooms become unreachable.">↻ Refresh identity</button>
+      </div>
+      <p id="identity-info" class="status"></p>
+    </div>
+
+    <!-- Step 2: create-room form -->
+    <div id="step-c-create" class="step card hidden">
+      <h2>New room</h2>
+      <label class="field">
+        <span>Your nickname</span>
+        <input type="text" id="create-nickname" placeholder="alice" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>Room name (optional)</span>
+        <input type="text" id="create-roomname" placeholder="my room" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>Password (leave empty for plain room)</span>
+        <div class="input-row">
+          <input type="text" id="create-password" placeholder="optional — enables 🔒 e2e encryption" autocomplete="off" />
+          <button type="button" id="btn-suggest-password" class="btn-ghost btn-small" title="Generate a memorable password">🎲 Suggest</button>
+        </div>
+      </label>
+      <p class="status">Plain rooms still travel through the mixnet, but messages aren't end-to-end encrypted. Password-protected rooms use SPAKE2 + AEAD per participant.</p>
+      <div class="btn-row">
+        <button id="btn-create-confirm" class="btn-primary">Create</button>
+        <button id="btn-create-cancel" class="btn-ghost">Cancel</button>
+      </div>
+      <span id="status-c-create" class="status"></span>
+    </div>
+
+    <!-- Step 3: join-room form -->
+    <div id="step-c-join" class="step card hidden">
+      <h2>Join chat room</h2>
+      <p id="join-room-info" class="status"></p>
+      <label class="field">
+        <span>Your nickname</span>
+        <input type="text" id="join-nickname" placeholder="bob" autocomplete="off" />
+      </label>
+      <label class="field" id="join-password-field">
+        <span>Password</span>
+        <input type="text" id="join-password" placeholder="required" autocomplete="off" />
+      </label>
+      <div class="btn-row">
+        <button id="btn-join-confirm" class="btn-primary">Join</button>
+        <button id="btn-join-cancel" class="btn-ghost">Cancel</button>
+      </div>
+      <span id="status-c-join" class="status"></span>
+    </div>
+
+    <!-- Step 4: connecting -->
+    <div id="step-c-connecting" class="step card hidden">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div class="spinner"></div>
+        <span id="status-c-connect" class="status">Initializing…</span>
+      </div>
+    </div>
+
+    <!-- Step 5: in-chat view -->
+    <div id="step-c-room" class="step card hidden">
+      <div class="chat-header">
+        <span id="chat-room-name" class="chat-room-name"></span>
+        <span id="chat-lock" class="chat-lock hidden" title="End-to-end encrypted">🔒</span>
+        <span class="chat-header-spacer"></span>
+        <button id="btn-chat-share" class="btn-ghost btn-small hidden">Share</button>
+        <button id="btn-chat-leave" class="btn-ghost btn-small">Leave</button>
+      </div>
+      <div id="chat-members" class="chat-members"></div>
+      <div id="chat-share-area" class="chat-share-area hidden">
+        <div id="chat-share-link" class="wormhole-link"></div>
+        <div class="btn-row">
+          <button id="btn-chat-copy-link" class="btn-ghost">Copy link</button>
+          <button id="btn-chat-share-close" class="btn-ghost">Hide</button>
+        </div>
+      </div>
+      <div id="chat-messages" class="chat-messages"></div>
+      <form id="chat-form" class="chat-input-row" autocomplete="off">
+        <input type="text" id="chat-input" placeholder="Type a message…" autocomplete="off" />
+        <button type="submit" class="btn-primary">Send</button>
+      </form>
+    </div>
+
+  </div><!-- /panel-chat -->
 
 </main>
 
