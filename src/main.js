@@ -483,7 +483,7 @@ $('btn-send-start').addEventListener('click', async () => {
       onPacketReceived,
       onCode: code => {
         $('wormhole-code').textContent = code;
-        const link = window.location.origin + window.location.pathname + '?code=' + encodeURIComponent(code);
+        const link = window.location.origin + window.location.pathname + '#code=' + encodeURIComponent(code);
         const linkEl = $('wormhole-link');
         linkEl.href = link;
         linkEl.textContent = link;
@@ -554,11 +554,16 @@ $('btn-send-again').addEventListener('click', () => {
   updateSendButtonState();
 });
 
-// ── Auto-fill code from URL query param and auto-connect ──────────────────────
+// ── Auto-fill code from URL fragment and auto-connect ────────────────────────
+// We use the URL fragment (#code=…) so the code is never sent to any server —
+// browsers don't include fragments in HTTP requests. Query-string (?code=…)
+// is still parsed as a fallback for older shared links.
 
 (function () {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
+  const hash      = window.location.hash.replace(/^#/, '');
+  const hashParams = new URLSearchParams(hash);
+  const code = hashParams.get('code')
+            ?? new URLSearchParams(window.location.search).get('code');
   if (!code) return;
   $('code-input').value = code;
   // Switch to receive tab
