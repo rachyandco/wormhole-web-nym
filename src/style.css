@@ -148,6 +148,66 @@ main {
   color: #fff;
   font-weight: 600;
 }
+.tab-icon {
+  display: inline-block;
+  margin-right: 4px;
+  font-weight: 700;
+}
+
+/* Send-mode switcher (File / Text) */
+.mode-switch {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  gap: 4px;
+}
+.mode-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mode-btn:hover:not(.active) { color: var(--text); }
+.mode-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+/* Textarea (compose / received text) */
+textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  min-height: 120px;
+  transition: border-color 0.15s;
+}
+textarea:focus { border-color: var(--accent); }
+textarea[readonly] {
+  color: var(--text);
+  background: var(--bg);
+}
+
+#mode-file-pane, #mode-text-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
 /* Panels / Steps */
 .panel { display: flex; flex-direction: column; gap: 16px; }

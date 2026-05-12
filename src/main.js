@@ -10,6 +10,12 @@ const NYM_API_URL    = 'https://validator.nymtech.net/api';
 const NYM_FORCE_TLS  = true;
 const CLIENT_ID_KEY  = 'wormhole-web-client-id';
 
+// Magic marker so the receiver can distinguish a text message from a regular
+// file. A CLI receiver will just save the file as normal; the web receiver
+// strips the header and displays the text.
+const TEXT_MSG_FILENAME = '__wormhole_text_message__.txt';
+const TEXT_MSG_MAGIC    = new TextEncoder().encode('WORMHOLE-TEXT-v1\n');
+
 // ── State ──────────────────────────────────────────────────────────────────────
 const mixnet = new Mixnet();
 let nymInitPromise = null;
@@ -273,6 +279,17 @@ $('tab-send').addEventListener('click', () => {
 
 const receivePanel = $('panel-receive');
 
+/** Return text payload if blob carries the wormhole-text marker, else null. */
+async function tryDecodeTextMessage(filename, blob) {
+  if (filename !== TEXT_MSG_FILENAME) return null;
+  if (blob.size < TEXT_MSG_MAGIC.length) return null;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  for (let i = 0; i < TEXT_MSG_MAGIC.length; i++) {
+    if (bytes[i] !== TEXT_MSG_MAGIC[i]) return null;
+  }
+  return new TextDecoder().decode(bytes.subarray(TEXT_MSG_MAGIC.length));
+}
+
 $('btn-connect').addEventListener('click', async () => {
   const code = $('code-input').value.trim();
   if (!code) { alert('Please enter a wormhole code.'); return; }
@@ -303,13 +320,23 @@ $('btn-connect').addEventListener('click', async () => {
       onPacketReceived,
 
       onOffer: async offer => {
-        $('offer-filename').textContent = `File: ${offer.filename}`;
-        $('offer-filesize').textContent = `Size: ${formatBytes(offer.filesize)}`;
+        const isText = offer.filename === TEXT_MSG_FILENAME;
+        if (isText) {
+          $('offer-heading').textContent = 'Incoming text message';
+          $('offer-filename').textContent = '';
+          $('offer-filesize').textContent = `Size: ${formatBytes(offer.filesize)}`;
+          $('btn-accept').textContent = 'Read message';
+        } else {
+          $('offer-heading').textContent = 'Incoming file';
+          $('offer-filename').textContent = `File: ${offer.filename}`;
+          $('offer-filesize').textContent = `Size: ${formatBytes(offer.filesize)}`;
+          $('btn-accept').textContent = 'Accept & download';
+        }
         showOnly(['step-r-offer'], receivePanel);
         return new Promise(resolve => {
           $('btn-accept').onclick = () => {
             showOnly(['step-r-progress'], receivePanel);
-            setStatus('status-r-progress', 'Starting download…');
+            setStatus('status-r-progress', isText ? 'Receiving message…' : 'Starting download…');
             resolve(true);
           };
           $('btn-reject').onclick = () => {
@@ -326,7 +353,13 @@ $('btn-connect').addEventListener('click', async () => {
         setStatus('status-r-progress', `${formatBytes(received)} / ${formatBytes(total)}`);
       },
 
-      onComplete: (filename, blob) => {
+      onComplete: async (filename, blob) => {
+        const text = await tryDecodeTextMessage(filename, blob);
+        if (text !== null) {
+          $('received-text').value = text;
+          showOnly(['step-r-text'], receivePanel);
+          return;
+        }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = filename; a.click();
@@ -352,17 +385,78 @@ $('btn-receive-again').addEventListener('click', () => {
   setStatus('status-r-code', '');
 });
 
+$('btn-receive-text-again').addEventListener('click', () => {
+  $('code-input').value = '';
+  $('received-text').value = '';
+  $('btn-connect').disabled = false;
+  showOnly(['step-r-code'], receivePanel);
+  setStatus('status-r-code', '');
+});
+
+$('btn-copy-text').addEventListener('click', () => {
+  navigator.clipboard.writeText($('received-text').value).then(() => {
+    $('btn-copy-text').textContent = 'Copied!';
+    setTimeout(() => { $('btn-copy-text').textContent = 'Copy text'; }, 2000);
+  });
+});
+
 // ── SEND flow ──────────────────────────────────────────────────────────────────
 
 const sendPanel = $('panel-send');
 let selectedFile = null;
+let sendMode = 'file'; // 'file' | 'text'
+
+function updateSendButtonState() {
+  const btn = $('btn-send-start');
+  if (sendMode === 'file') {
+    btn.disabled = !selectedFile;
+    btn.textContent = 'Nym it (send file)';
+  } else {
+    btn.disabled = $('text-input').value.length === 0;
+    btn.textContent = 'Nym it (send text)';
+  }
+}
+
+function setSendMode(mode) {
+  sendMode = mode;
+  const isFile = mode === 'file';
+  $('mode-file').classList.toggle('active', isFile);
+  $('mode-text').classList.toggle('active', !isFile);
+  $('mode-file').setAttribute('aria-selected', String(isFile));
+  $('mode-text').setAttribute('aria-selected', String(!isFile));
+  $('mode-file-pane').classList.toggle('hidden', !isFile);
+  $('mode-text-pane').classList.toggle('hidden', isFile);
+  updateSendButtonState();
+}
+
+$('mode-file').addEventListener('click', () => setSendMode('file'));
+$('mode-text').addEventListener('click', () => setSendMode('text'));
 
 $('file-input').addEventListener('change', e => {
   selectedFile = e.target.files[0] || null;
-  $('btn-send-start').disabled = !selectedFile;
+  updateSendButtonState();
 });
 
+$('text-input').addEventListener('input', e => {
+  $('text-char-count').textContent = `${e.target.value.length} characters`;
+  updateSendButtonState();
+});
+
+/** Wrap a text string into a File using the wormhole-text marker. */
+function buildTextMessageFile(text) {
+  const textBytes = new TextEncoder().encode(text);
+  const body = new Uint8Array(TEXT_MSG_MAGIC.length + textBytes.length);
+  body.set(TEXT_MSG_MAGIC, 0);
+  body.set(textBytes, TEXT_MSG_MAGIC.length);
+  return new File([body], TEXT_MSG_FILENAME, { type: 'text/plain' });
+}
+
 $('btn-send-start').addEventListener('click', async () => {
+  if (sendMode === 'text') {
+    const text = $('text-input').value;
+    if (!text) return;
+    selectedFile = buildTextMessageFile(text);
+  }
   if (!selectedFile) return;
   $('btn-send-start').disabled = true;
   showOnly(['step-s-connecting'], sendPanel);
@@ -416,6 +510,8 @@ $('btn-send-start').addEventListener('click', async () => {
       onComplete: () => {
         selectedFile = null;
         $('file-input').value = '';
+        $('text-input').value = '';
+        $('text-char-count').textContent = '0 characters';
         $('btn-send-start').disabled = true;
         showOnly(['step-s-done'], sendPanel);
       },
@@ -448,12 +544,14 @@ $('btn-copy-link').addEventListener('click', () => {
 $('btn-send-again').addEventListener('click', () => {
   selectedFile = null;
   $('file-input').value = '';
-  $('btn-send-start').disabled = true;
+  $('text-input').value = '';
+  $('text-char-count').textContent = '0 characters';
   $('wormhole-code').textContent = '';
   $('qr-code').innerHTML = '';
   $('btn-share').classList.add('hidden');
   showOnly(['step-s-file'], sendPanel);
   setStatus('status-s-file', '');
+  updateSendButtonState();
 });
 
 // ── Auto-fill code from URL query param and auto-connect ──────────────────────
