@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Wormhole-Nym Web</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <script type="module" crossorigin src="/assets/index-G6JoExcs.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-CWBFFUgH.css">
+  <script type="module" crossorigin src="/assets/index-DRjokrU2.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-BpFDquzC.css">
 </head>
 <body>
 
@@ -47,8 +47,8 @@
 
   <!-- Tab bar -->
   <div class="tabs">
-    <button id="tab-send"    class="tab active">Send a file</button>
-    <button id="tab-receive" class="tab">Receive a file</button>
+    <button id="tab-send"    class="tab active"><span class="tab-icon" aria-hidden="true">↑</span> Send</button>
+    <button id="tab-receive" class="tab"><span class="tab-icon" aria-hidden="true">↓</span> Receive</button>
   </div>
 
   <!-- Active-transfer warning -->
@@ -104,7 +104,7 @@
 
     <!-- Step 3: offer received -->
     <div id="step-r-offer" class="step card hidden">
-      <h2>Incoming file</h2>
+      <h2 id="offer-heading">Incoming file</h2>
       <p id="offer-filename" class="status"></p>
       <p id="offer-filesize" class="status"></p>
       <div class="btn-row">
@@ -128,17 +128,46 @@
       <button id="btn-receive-again" class="btn-ghost">Receive another file</button>
     </div>
 
+    <!-- Step 5b: text message received -->
+    <div id="step-r-text" class="step card hidden">
+      <div class="done-icon">💬</div>
+      <h2 style="text-align:center">Message received</h2>
+      <textarea id="received-text" rows="8" readonly></textarea>
+      <div class="btn-row">
+        <button id="btn-copy-text" class="btn-ghost">Copy text</button>
+        <button id="btn-receive-text-again" class="btn-ghost">Receive another</button>
+      </div>
+    </div>
+
   </div><!-- /panel-receive -->
 
 
   <!-- ═══════════════════════════════ SEND PANEL ════════════════════════════ -->
   <div id="panel-send" class="panel">
 
-    <!-- Step 1: select file -->
+    <!-- Step 1: select file or compose text -->
     <div id="step-s-file" class="step card">
-      <h2>Select a file to send</h2>
-      <input type="file" id="file-input" />
-      <button id="btn-send-start" class="btn-primary" disabled>Nym it (Start transfer)</button>
+      <div class="mode-switch" role="tablist" aria-label="Send mode">
+        <button id="mode-file" class="mode-btn active" type="button" role="tab" aria-selected="true">
+          <span aria-hidden="true">📄</span> File
+        </button>
+        <button id="mode-text" class="mode-btn" type="button" role="tab" aria-selected="false">
+          <span aria-hidden="true">💬</span> Text
+        </button>
+      </div>
+
+      <div id="mode-file-pane">
+        <h2>Select a file to send</h2>
+        <input type="file" id="file-input" />
+      </div>
+
+      <div id="mode-text-pane" class="hidden">
+        <h2>Type a message to send</h2>
+        <textarea id="text-input" rows="6" placeholder="Type or paste a message…" spellcheck="false"></textarea>
+        <span id="text-char-count" class="status">0 characters</span>
+      </div>
+
+      <button id="btn-send-start" class="btn-primary" disabled>Nym it (send file)</button>
       <span id="status-s-file" class="status"></span>
     </div>
 
