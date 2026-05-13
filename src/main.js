@@ -783,6 +783,8 @@ async function startHosting(room) {
     password: room.encrypted ? room.password : null,
     mixnet,
     callbacks: {
+      onPacketSent,
+      onPacketReceived,
       onMessage: msg => {
         appendChatMessage(room.id, msg);
       },
@@ -807,6 +809,8 @@ async function startJoining(room, persisted) {
     password:    room.encrypted ? room.password : null,
     mixnet,
     callbacks: {
+      onPacketSent,
+      onPacketReceived,
       onMessage: msg => appendChatMessage(room.id, msg),
       onStatus:  text => setStatus('status-c-connect', text),
       onClosed:  reason => {

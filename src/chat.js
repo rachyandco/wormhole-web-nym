@@ -202,6 +202,7 @@ function ctrNext(ref) {
  */
 export function hostRoom(config) {
   const { roomName, nickname, password, mixnet, callbacks } = config;
+  const { onPacketSent, onPacketReceived } = callbacks;
   const encrypted = !!password;
   const pwBytes   = encrypted ? new TextEncoder().encode(password) : null;
 
@@ -221,7 +222,10 @@ export function hostRoom(config) {
     } else {
       bytes = encodeFrame(frame);
     }
-    try { await mixnet.rawSend(addr, bytes); } catch (e) { /* ignore single-recipient failures */ }
+    try {
+      await mixnet.rawSend(addr, bytes);
+      onPacketSent?.();
+    } catch (e) { /* ignore single-recipient failures */ }
   };
 
   const broadcast = async (frame) => {
@@ -240,8 +244,11 @@ export function hostRoom(config) {
 
     if (encrypted) {
       if (!frame.pake_msg) {
-        await mixnet.rawSend(frame.return_addr,
-          encodeFrame({ type: 'JoinReject', reason: 'Room is password-protected' })).catch(() => {});
+        try {
+          await mixnet.rawSend(frame.return_addr,
+            encodeFrame({ type: 'JoinReject', reason: 'Room is password-protected' }));
+          onPacketSent?.();
+        } catch {}
         return;
       }
       try {
@@ -255,8 +262,11 @@ export function hostRoom(config) {
         encKey = keys.recvKey;
         decKey = keys.sendKey;
       } catch (e) {
-        await mixnet.rawSend(frame.return_addr,
-          encodeFrame({ type: 'JoinReject', reason: 'Key exchange failed (wrong password?)' })).catch(() => {});
+        try {
+          await mixnet.rawSend(frame.return_addr,
+            encodeFrame({ type: 'JoinReject', reason: 'Key exchange failed (wrong password?)' }));
+          onPacketSent?.();
+        } catch {}
         return;
       }
     }
@@ -269,11 +279,14 @@ export function hostRoom(config) {
     };
     participants.set(frame.return_addr, p);
 
-    await mixnet.rawSend(frame.return_addr, encodeFrame({
-      type: 'JoinAck',
-      pake_msg: ackPake,
-      room_name: roomName,
-    })).catch(() => {});
+    try {
+      await mixnet.rawSend(frame.return_addr, encodeFrame({
+        type: 'JoinAck',
+        pake_msg: ackPake,
+        room_name: roomName,
+      }));
+      onPacketSent?.();
+    } catch {}
 
     callbacks.onMembersChanged(membersList());
     await systemBroadcast(`${frame.nickname} joined`);
@@ -316,6 +329,7 @@ export function hostRoom(config) {
   };
 
   const unsub = mixnet.subscribe(e => {
+    onPacketReceived?.();
     const bytes = e.args.payload;
     if (!isChatFrame(bytes)) return;
     handleFrame(bytes).catch(err => console.warn('Chat host handler error', err));
@@ -356,6 +370,7 @@ export function hostRoom(config) {
  */
 export async function joinRoom(config) {
   const { hostAddress, nickname, password, mixnet, callbacks } = config;
+  const { onPacketSent, onPacketReceived } = callbacks;
   const encrypted = !!password;
   const pwBytes   = encrypted ? new TextEncoder().encode(password) : null;
   const encCtr    = { v: 0n };
@@ -372,6 +387,7 @@ export async function joinRoom(config) {
 
   const unsub = mixnet.subscribe(e => {
     if (closed) return;
+    onPacketReceived?.();
     const bytes = e.args.payload;
     if (!isChatFrame(bytes)) return;
     let frame;
@@ -441,6 +457,7 @@ export async function joinRoom(config) {
   };
   const joinBytes = encodeFrame(joinFrame);
   await mixnet.rawSend(hostAddress, joinBytes);
+  onPacketSent?.();
   callbacks.onStatus?.('Waiting for host to accept…');
 
   const waitFor = (ms) => Promise.race([
@@ -453,7 +470,7 @@ export async function joinRoom(config) {
     ackResult = await waitFor(60_000);
   } catch (firstErr) {
     callbacks.onStatus?.('Retrying join…');
-    try { await mixnet.rawSend(hostAddress, joinBytes); } catch {}
+    try { await mixnet.rawSend(hostAddress, joinBytes); onPacketSent?.(); } catch {}
     try {
       ackResult = await waitFor(60_000);
     } catch (secondErr) {
@@ -475,6 +492,7 @@ export async function joinRoom(config) {
         bytes = encodeFrame({ type: 'Say', nickname, text, ts_ms });
       }
       await mixnet.rawSend(hostAddress, bytes);
+      onPacketSent?.();
     },
     close() {
       if (closed) return;
@@ -482,7 +500,7 @@ export async function joinRoom(config) {
       const leaveBytes = encrypted && encKey
         ? seal(encKey, ctrNext(encCtr), { type: 'Leave' })
         : encodeFrame({ type: 'Leave' });
-      mixnet.rawSend(hostAddress, leaveBytes).catch(() => {});
+      mixnet.rawSend(hostAddress, leaveBytes).then(() => onPacketSent?.()).catch(() => {});
       unsub();
     },
   };
